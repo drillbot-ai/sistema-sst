@@ -1,0 +1,28 @@
+{
+  "code": "GO-FO-10",
+  "name": "Cronograma de actividades de mantenimiento",
+  "version": 1,
+  "sections": [
+    {
+      "id": "hdr",
+      "title": "Encabezado",
+      "fields": [
+        { "id": "month", "label": "Mes", "type": "select", "options": ["01","02","03","04","05","06","07","08","09","10","11","12"] },
+        { "id": "year", "label": "Año", "type": "number" }
+      ]
+    },
+    {
+      "id": "schedule",
+      "title": "Programación",
+      "type": "table",
+      "columns": [
+        { "id": "codigo", "label": "Código", "type": "text" },
+        { "id": "equipo", "label": "Equipo", "type": "text" },
+        { "id": "marca", "label": "Marca", "type": "text" },
+        { "id": "caracteristicas", "label": "Características Principales", "type": "text" },
+        { "id": "dias", "label": "Días", "type": "number" },
+        { "id": "frecuencia", "label": "Frecuencia", "type": "select", "options": ["Semanal","Quincenal","Mensual","Bimestral","Trimestral"] }
+      ]
+    }
+  ]
+}

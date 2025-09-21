@@ -26,39 +26,37 @@ enum UserRole {
 // MANAGER pueden registrar accidentes). Se puede asociar un Driver a un
 // usuario mediante campos en el modelo Driver o a través de otras tablas.
 model User {
-  id            Int            @id @default(autoincrement())
-  email         String         @unique
-  password      String
-  role          UserRole       @default(DRIVER)
-  name          String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  refreshTokens RefreshToken[]
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  password  String
+  role      UserRole  @default(DRIVER)
+  name      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
 model Vehicle {
-  id          Int          @id @default(autoincrement())
-  plate       String       @unique
-  brand       String?
-  model       String?
-  year        Int?
-  vin         String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id        Int       @id @default(autoincrement())
+  plate     String    @unique
+  brand     String?
+  model     String?
+  year      Int?
+  vin       String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   inspections Inspection[]
-  accidents   Accident[]
-  polizas     Poliza[]
+  accidents  Accident[]
 }
 
 model Driver {
-  id          Int          @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   firstName   String
   lastName    String
-  license     String       @unique
+  license     String    @unique
   phone       String?
   email       String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   inspections Inspection[]
   accidents   Accident[]
 }
@@ -71,7 +69,7 @@ model Inspection {
   driver    Driver?  @relation(fields: [driverId], references: [id])
   driverId  Int?
   notes     String?
-  data      Json? // JSON containing the checklist results
+  data      Json?    // JSON containing the checklist results
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -92,7 +90,7 @@ model Accident {
 model Contractor {
   id        Int      @id @default(autoincrement())
   name      String
-  nit       String   @unique
+  nit       String    @unique
   contact   String?
   phone     String?
   email     String?
@@ -129,8 +127,8 @@ model Poliza {
   // Clave y URL del archivo digitalizado almacenado en S3 o almacenamiento
   // compatible. Estos campos permiten vincular la póliza a un PDF/imagen
   // adjunta. Si se utiliza almacenamiento local, se pueden dejar vacíos.
-  fileKey String?
-  fileUrl String?
+  fileKey   String?
+  fileUrl   String?
 }
 
 // Registro de una capacitación de SST o HSE. Incluye datos básicos de la
@@ -154,22 +152,36 @@ model Capacitacion {
 // usuario y tiene fecha de expiración. Al utilizarse, se invalida el token
 // anterior y se crea uno nuevo.
 model RefreshToken {
-  id        Int      @id @default(autoincrement())
-  token     String   @unique
-  user      User     @relation(fields: [userId], references: [id])
-  userId    Int
-  createdAt DateTime @default(now())
-  expiresAt DateTime
+  id         Int      @id @default(autoincrement())
+  token      String   @unique
+  user       User     @relation(fields: [userId], references: [id])
+  userId     Int
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+}
+
+// -----------------------
+// Form engine models
+// These models allow the system to manage dynamic forms (formatos) used in SG‑SST.
+// A Form represents a logical form identified by a code (e.g. GO-FO-09).
+// Each form can have multiple versions; only one version is active at a time.
+// Submissions store user‑entered data according to a specific version.
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
 }
 
 model Form {
-  id          String        @id @default(cuid())
-  code        String        @unique
+  id          String         @id @default(cuid())
+  code        String         @unique
   name        String
   description String?
   versions    FormVersion[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 }
 
 model FormVersion {
@@ -177,12 +189,11 @@ model FormVersion {
   formId    String
   form      Form     @relation(fields: [formId], references: [id])
   version   Int
-  schema    Json
+  schema    Json     // JSON schema describing sections, fields, types and options
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
   @@unique([formId, version])
-  submissions Submission[]
 }
 
 model Submission {
@@ -191,8 +202,8 @@ model Submission {
   formVersion    FormVersion      @relation(fields: [formVersionId], references: [id])
   status         SubmissionStatus @default(DRAFT)
   data           Json
-  vehicleId      Int?
-  driverId       Int?
+  vehicleId      Int?             // optional FK to Vehicle, used when the form relates to a vehicle
+  driverId       Int?             // optional FK to Driver, used when the form relates to a driver
   createdBy      String?
   submittedAt    DateTime?
   createdAt      DateTime         @default(now())
@@ -205,14 +216,7 @@ model Attachment {
   submissionId String
   submission   Submission @relation(fields: [submissionId], references: [id])
   name         String
-  url          String     // usa presigned S3 en prod
+  url          String    // path or presigned URL to an uploaded file
   mime         String
-  createdAt    DateTime   @default(now())
-}
-
-enum SubmissionStatus {
-  DRAFT
-  SUBMITTED
-  APPROVED
-  REJECTED
+  createdAt    DateTime  @default(now())
 }

@@ -1,0 +1,41 @@
+{
+  "code": "GO-FO-01",
+  "name": "Hoja de vida de maquinaria",
+  "version": 1,
+  "sections": [
+    {
+      "id": "ident",
+      "title": "Identificación",
+      "fields": [
+        { "id": "vehicleId", "label": "Equipo/Vehículo", "type": "ref:vehicle", "required": true },
+        { "id": "serial", "label": "Serial/NIV", "type": "text" },
+        { "id": "brand", "label": "Marca", "type": "text" },
+        { "id": "model", "label": "Modelo", "type": "text" },
+        { "id": "year", "label": "Año", "type": "number" }
+      ]
+    },
+    {
+      "id": "docs",
+      "title": "Documentos y pólizas",
+      "type": "table",
+      "columns": [
+        { "id": "type", "label": "Tipo", "type": "select", "options": ["SOAT","RTM","Contractual","Extracontractual","Hidrocarburos","PE","Tecnomecánica","Otro"] },
+        { "id": "number", "label": "Número", "type": "text" },
+        { "id": "issuer", "label": "Aseguradora/Entidad", "type": "text" },
+        { "id": "issueDate", "label": "Expedición", "type": "date" },
+        { "id": "expireDate", "label": "Vencimiento", "type": "date" }
+      ]
+    },
+    {
+      "id": "hist",
+      "title": "Historial de mantenimiento",
+      "type": "table",
+      "columns": [
+        { "id": "date", "label": "Fecha", "type": "date" },
+        { "id": "type", "label": "Tipo", "type": "select", "options": ["Preventivo","Correctivo"] },
+        { "id": "desc", "label": "Descripción", "type": "text" },
+        { "id": "cost", "label": "Costo", "type": "number" }
+      ]
+    }
+  ]
+}

@@ -1,41 +1,34 @@
-// Minimal seed (no-op)import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
+import fs from 'fs';
+import path from 'path';
 
-async function main() {import fs from 'fs';
-
-  // Add initial data if neededimport path from 'path';
-
-}
+// Seed script to load dynamic form definitions into the database.
+// It iterates over all JSON files in prisma/forms and upserts the
+// corresponding Form and FormVersion records. If a form already
+// exists, it inserts a new version; otherwise, it creates the form.
 
 const prisma = new PrismaClient();
 
-main().catch((e) => {
-
-  console.error(e);async function upsertForm(jsonFile: string) {
-
-  process.exit(1);  const raw = fs.readFileSync(jsonFile, 'utf-8');
-
-});  const def = JSON.parse(raw);
-
+async function upsertForm(def: any) {
   const form = await prisma.form.upsert({
     where: { code: def.code },
     update: { name: def.name, description: def.description ?? undefined },
-    create: { code: def.code, name: def.name, description: def.description ?? undefined }
+    create: { code: def.code, name: def.name, description: def.description ?? undefined },
   });
-  await prisma.formVersion.create({
-    data: {
-      formId: form.id,
-      version: def.version ?? 1,
-      schema: def,
-      active: true
-    }
-  });
+  // Insert a new version; mark existing versions as inactive
+  await prisma.formVersion.updateMany({ where: { formId: form.id }, data: { active: false } });
+  await prisma.formVersion.create({ data: { formId: form.id, version: def.version ?? 1, schema: def, active: true } });
   console.log(`Seeded ${def.code}`);
 }
 
 async function main() {
-  const dir = path.join(__dirname, '..', 'seeds', 'forms');
-  const files = ['go-fo-09.json', 'go-fo-07.json', 'go-fo-01.json'];
-  for (const f of files) await upsertForm(path.join(dir, f));
+  const formsDir = path.join(__dirname, 'forms');
+  const files = fs.readdirSync(formsDir).filter(f => f.endsWith('.json'));
+  for (const file of files) {
+    const contents = fs.readFileSync(path.join(formsDir, file), 'utf-8');
+    const def = JSON.parse(contents);
+    await upsertForm(def);
+  }
 }
 
-main().catch(console.error).finally(()=>prisma.$disconnect());
+main().catch((err) => console.error(err)).finally(() => prisma.$disconnect());

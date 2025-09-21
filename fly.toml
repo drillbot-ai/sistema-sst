@@ -1,0 +1,9 @@
+# Fly.io configuration example for deploying the backend service.
+# Define your app name, region and Dockerfile location. Adjust based on your Fly.io account.
+
+app = "sgs-backend"
+
+primary_region = "iad"
+
+[build]
+  dockerfile = "backend/Dockerfile"

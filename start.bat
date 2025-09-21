@@ -1,35 +1,59 @@
 @echo off
-setlocal EnableExtensions
-set "ROOT=%~dp0"
-set "BACKEND=%ROOT%backend"
-set "FRONTEND=%ROOT%frontend"
+REM Script de arranque para el sistema SST en Windows
+REM Ejecuta la base de datos, el backend y el frontend en ventanas separadas.
 
-echo Iniciando base de datos (Docker)...
-pushd "%ROOT%"
+echo Preparando el entorno del Sistema SG‑SST...
+
+REM 1. Verificar archivo de entorno. Si no existe .env en backend, copiar ejemplo
+IF NOT EXIST backend\.env (
+  echo Copiando archivo .env de ejemplo...
+  copy backend\.env.example backend\.env > NUL
+)
+
+REM 2. Reiniciar la base de datos de Docker.
+REM Intenta detener y eliminar cualquier contenedor previo asociado a este docker-compose
+call docker-compose down --remove-orphans > NUL 2>&1
+REM Levantar nuevamente la base de datos
 docker-compose up -d
 IF ERRORLEVEL 1 (
-  echo Error al iniciar Docker. ¿Docker Desktop está ejecutándose?
-  goto end
+  echo Error al iniciar Docker. ¿Tiene Docker instalado y en ejecución?
+  GOTO end
+)
+
+REM 3. Instalar dependencias y generar prisma en el backend
+pushd backend
+IF NOT EXIST node_modules (
+  echo Instalando dependencias del backend...
+  call npm install
+)
+
+IF EXIST prisma\schema.prisma (
+  echo Generando cliente Prisma...
+  call npx prisma generate
+  echo Aplicando migraciones de Prisma...
+  call npx prisma migrate deploy
 )
 popd
 
-echo Backend: instalando dependencias y generando Prisma
-pushd "%BACKEND%"
-IF NOT EXIST .env IF EXIST .env.example copy .env.example .env > NUL
-IF NOT EXIST node_modules ( npm install )
-npx prisma generate
-npx prisma db push
-start "SST Backend" cmd /k "cd /d "%BACKEND%" && npm run dev"
+REM 4. Instalar dependencias del frontend
+pushd frontend
+IF NOT EXIST node_modules (
+  echo Instalando dependencias del frontend...
+  call npm install
+)
 popd
 
-echo Frontend: preparando e iniciando
-pushd "%FRONTEND%"
-IF NOT EXIST node_modules ( npm install )
-start "SST Frontend" cmd /k "cd /d "%FRONTEND%" && npm run dev"
-popd
+REM 5. Lanzar servidores en nuevas ventanas de consola
+echo Iniciando servicios...
+start "SST Backend" cmd /k "cd backend && npm run dev"
+start "SST Frontend" cmd /k "cd frontend && npm run dev"
 
-start "Abrir Navegador" cmd /c "timeout /t 4 >nul && start http://localhost:3000"
-
-echo Listo. Backend en http://localhost:3001, Frontend en http://localhost:3000
+echo.
+echo Sistema iniciado correctamente.
+echo El backend se ejecuta en http://localhost:3001 y el frontend en http://localhost:3000
+echo Para detener los servicios presione Ctrl+C en cada ventana o ejecute docker-compose down.
 
 :end
+echo.
+echo Presione cualquier tecla para cerrar esta ventana...
+pause > nul

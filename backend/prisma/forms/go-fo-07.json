@@ -1,0 +1,37 @@
+{
+  "code": "GO-FO-07",
+  "name": "Inspección kit ambiental",
+  "version": 1,
+  "sections": [
+    {
+      "id": "info",
+      "title": "Equipo",
+      "fields": [
+        { "id": "vehicleId", "label": "Vehículo", "type": "ref:vehicle", "required": true },
+        { "id": "date", "label": "Fecha", "type": "date", "required": true }
+      ]
+    },
+    {
+      "id": "checklist",
+      "title": "Checklist",
+      "type": "checklist",
+      "items": [
+        { "id": "absorbentes", "label": "Absorbentes" },
+        { "id": "bolsas", "label": "Bolsas plásticas" },
+        { "id": "pala", "label": "Pala" },
+        { "id": "guantes", "label": "Guantes" },
+        { "id": "contEncapsulado", "label": "Contenedor encapsulado" }
+      ],
+      "allowPhoto": true,
+      "levels": ["OK", "NO", "NA"]
+    },
+    {
+      "id": "obs",
+      "title": "Observaciones",
+      "fields": [
+        { "id": "notes", "label": "Notas", "type": "text" },
+        { "id": "responsable", "label": "Responsable", "type": "text" }
+      ]
+    }
+  ]
+}

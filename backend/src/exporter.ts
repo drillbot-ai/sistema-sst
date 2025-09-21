@@ -6,28 +6,30 @@ import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
 import puppeteer from 'puppeteer';
 
+// Export helper functions for generating PDF and Excel representations of a submission.
+
 const prisma = new PrismaClient();
 
+/**
+ * Render a submission into a PDF buffer using Handlebars and Puppeteer.
+ * Looks up the submission and its associated form code, loads the corresponding
+ * Handlebars template from templates/, and injects the submission data.
+ */
 export async function renderPdf(submissionId: string): Promise<Buffer> {
   const sub = await prisma.submission.findUnique({
     where: { id: submissionId },
-    include: { formVersion: { include: { form: true } } }
+    include: { formVersion: { include: { form: true } } },
   });
   if (!sub) throw new Error('Submission not found');
-
-  // Seleccionar plantilla por código del formulario
   const code = sub.formVersion.form.code;
-  const tplFile = path.join(__dirname, '..', 'templates', `${code.toLowerCase()}.hbs`);
-  if (!fs.existsSync(tplFile)) throw new Error(`No template for code ${code}`);
-  const tpl = fs.readFileSync(tplFile, 'utf8');
-  const html = Handlebars.compile(tpl)({
-    code,
-    version: sub.formVersion.version,
-    data: sub.data,
-    dateNow: dayjs().format('YYYY-MM-DD HH:mm')
-  });
-
-  const browser = await puppeteer.launch({ headless: true });
+  const templatePath = path.join(__dirname, '..', 'templates', `${code.toLowerCase()}.hbs`);
+  if (!fs.existsSync(templatePath)) {
+    throw new Error(`Template not found for code ${code}`);
+  }
+  const templateString = fs.readFileSync(templatePath, 'utf8');
+  const template = Handlebars.compile(templateString);
+  const html = template({ code, version: sub.formVersion.version, data: sub.data, dateNow: dayjs().format('YYYY-MM-DD HH:mm') });
+  const browser = await puppeteer.launch({ headless: 'new' });
   const page = await browser.newPage();
   await page.setContent(html, { waitUntil: 'networkidle0' });
   const pdf = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '12mm', right: '12mm', bottom: '16mm', left: '12mm' } });
@@ -35,37 +37,49 @@ export async function renderPdf(submissionId: string): Promise<Buffer> {
   return pdf;
 }
 
+/**
+ * Render a submission into an Excel workbook buffer using xlsx. Creates a workbook
+ * with a header sheet and additional sheets based on the form code.
+ */
 export async function renderXlsx(submissionId: string): Promise<Buffer> {
   const sub = await prisma.submission.findUnique({
     where: { id: submissionId },
-    include: { formVersion: { include: { form: true } } }
+    include: { formVersion: { include: { form: true } } },
   });
   if (!sub) throw new Error('Submission not found');
   const code = sub.formVersion.form.code;
-
+  const data: any = sub.data;
   const wb = XLSX.utils.book_new();
-
-  // Hoja 1: encabezado plano
-  const hdrRows = Object.entries((sub.data as any).hdr ?? {}).map(([k,v]) => ({ campo: k, valor: v as any }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hdrRows), 'Encabezado');
-
-  // Por código, mapeos específicos
+  // Add generic header sheet
+  const headerData = Object.entries(data).filter(([key]) => typeof data[key] !== 'object').map(([k, v]) => ({ campo: k, valor: v as any }));
+  if (headerData.length > 0) {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(headerData), 'Resumen');
+  }
+  // Switch on code for specific sheets
   if (code === 'GO-FO-09') {
-    const trips = (sub.data as any).trips || [];
-    const sheet = XLSX.utils.json_to_sheet(trips);
-    XLSX.utils.book_append_sheet(wb, sheet, 'Recorridos');
+    const trips = data.trips || [];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trips), 'Recorridos');
   } else if (code === 'GO-FO-08' || code === 'GO-FO-07') {
-    const ck = (sub.data as any).checklist || {};
+    const ck = data.checklist || {};
     const rows = Object.keys(ck).map(id => ({ item: id, estado: ck[id]?.status ?? '', observacion: ck[id]?.note ?? '' }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Checklist');
   } else if (code === 'GO-FO-10') {
-    const schedule = (sub.data as any).schedule || [];
+    const schedule = data.schedule || [];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(schedule), 'Programación');
   } else if (code === 'GO-FO-12') {
-    const info = (sub.data as any).info || {};
+    const info = data.info || {};
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([info]), 'Comparendo');
+  } else if (code === 'GO-FO-15') {
+    // For GO-FO-15, export each checklist separately
+    const sections = ['luces','cabina','mecanico'];
+    sections.forEach(sec => {
+      const ckSec = data[sec] || {};
+      const rows = Object.keys(ckSec).map(id => ({ item: id, estado: ckSec[id]?.status ?? '', observacion: ckSec[id]?.note ?? '' }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), sec);
+    });
+    const docs = data.docs ? [data.docs] : [];
+    if (docs.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(docs), 'Documentos');
   }
-
-  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
-  return buf;
+  const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+  return buffer;
 }

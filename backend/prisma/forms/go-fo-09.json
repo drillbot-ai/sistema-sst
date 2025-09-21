@@ -1,0 +1,38 @@
+{
+  "code": "GO-FO-09",
+  "name": "Planilla diaria de recorrido",
+  "version": 1,
+  "sections": [
+    {
+      "id": "hdr",
+      "title": "Encabezado",
+      "fields": [
+        { "id": "date", "label": "Fecha", "type": "date", "required": true },
+        { "id": "vehicleId", "label": "Vehículo", "type": "ref:vehicle", "required": true },
+        { "id": "driverId", "label": "Conductor", "type": "ref:driver", "required": true },
+        { "id": "shift", "label": "Turno", "type": "select", "options": ["Día", "Noche"] }
+      ]
+    },
+    {
+      "id": "trips",
+      "title": "Recorridos",
+      "type": "table",
+      "columns": [
+        { "id": "time", "label": "Hora", "type": "time" },
+        { "id": "from", "label": "Origen", "type": "text" },
+        { "id": "to", "label": "Destino", "type": "text" },
+        { "id": "load", "label": "Carga", "type": "text" },
+        { "id": "km", "label": "Km", "type": "number", "min": 0 }
+      ],
+      "minRows": 1
+    },
+    {
+      "id": "sign",
+      "title": "Firmas",
+      "fields": [
+        { "id": "driverSign", "label": "Conductor", "type": "signature" },
+        { "id": "supervisorSign", "label": "Supervisor", "type": "signature" }
+      ]
+    }
+  ]
+}

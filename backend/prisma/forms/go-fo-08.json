@@ -1,0 +1,40 @@
+{
+  "code": "GO-FO-08",
+  "name": "Inspección kit de carreteras / herramientas",
+  "version": 1,
+  "sections": [
+    {
+      "id": "info",
+      "title": "Equipo",
+      "fields": [
+        { "id": "vehicleId", "label": "Vehículo", "type": "ref:vehicle", "required": true },
+        { "id": "date", "label": "Fecha", "type": "date", "required": true },
+        { "id": "responsable", "label": "Responsable", "type": "text" }
+      ]
+    },
+    {
+      "id": "checklist",
+      "title": "Checklist",
+      "type": "checklist",
+      "levels": ["OK", "NO", "NA"],
+      "items": [
+        { "id": "botiquin", "label": "Botiquín" },
+        { "id": "extintor", "label": "Extintor" },
+        { "id": "gato", "label": "Gato hidráulico" },
+        { "id": "llaveCruz", "label": "Llave de cruz" },
+        { "id": "conos", "label": "Conos / señales" },
+        { "id": "chaleco", "label": "Chaleco reflectivo" },
+        { "id": "linterna", "label": "Linterna" }
+      ]
+    },
+    {
+      "id": "obs",
+      "title": "Observaciones",
+      "fields": [
+        { "id": "notes", "label": "Notas", "type": "text" },
+        { "id": "driverSign", "label": "Firma conductor", "type": "signature" },
+        { "id": "inspectorSign", "label": "Firma inspector", "type": "signature" }
+      ]
+    }
+  ]
+}

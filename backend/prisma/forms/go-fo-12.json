@@ -1,0 +1,27 @@
+{
+  "code": "GO-FO-12",
+  "name": "Seguimiento a comparendos",
+  "version": 1,
+  "sections": [
+    {
+      "id": "info",
+      "title": "Datos del comparendo",
+      "fields": [
+        { "id": "date", "label": "Fecha", "type": "date", "required": true },
+        { "id": "vehiclePlate", "label": "Placa", "type": "text" },
+        { "id": "driverName", "label": "Conductor", "type": "text" },
+        { "id": "infringement", "label": "Infracción", "type": "text" },
+        { "id": "amount", "label": "Valor", "type": "number" },
+        { "id": "status", "label": "Estado", "type": "select", "options": ["Pendiente","Acuerdo","Pagado","Impugnado"] }
+      ]
+    },
+    {
+      "id": "support",
+      "title": "Soportes",
+      "fields": [
+        { "id": "docUrl", "label": "Documento soporte", "type": "text" },
+        { "id": "notes", "label": "Observaciones", "type": "text" }
+      ]
+    }
+  ]
+}

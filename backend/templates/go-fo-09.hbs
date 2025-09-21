@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; font-size:12px; color:#111; }
+    .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+    .logo { width:40px; height:40px; background:#2563eb; border-radius:8px; }
+    h1 { font-size:16px; margin:0; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { border:1px solid #e5e7eb; padding:6px 8px; }
+    th { background:#f9fafb; text-transform:uppercase; font-size:10px; letter-spacing:.04em; }
+    .meta { margin-bottom:12px; }
+    .small { color:#6b7280; font-size:11px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo"></div>
+    <div>
+      <h1>GO-FO-09 · Planilla diaria de recorrido</h1>
+      <div class="small">Versión {{version}} · {{dateNow}}</div>
+    </div>
+  </div>
+  <div class="meta">
+    <div><strong>Fecha:</strong> {{data.hdr.date}} &nbsp;&nbsp; 
+         <strong>Vehículo:</strong> {{data.hdr.vehicleId}} &nbsp;&nbsp; 
+         <strong>Conductor:</strong> {{data.hdr.driverId}} &nbsp;&nbsp;
+         <strong>Turno:</strong> {{data.hdr.shift}}</div>
+  </div>
+  <table>
+    <thead>
+      <tr><th>Hora</th><th>Origen</th><th>Destino</th><th>Carga</th><th>Km</th></tr>
+    </thead>
+    <tbody>
+      {{#each data.trips}}
+        <tr>
+          <td>{{this.time}}</td>
+          <td>{{this.from}}</td>
+          <td>{{this.to}}</td>
+          <td>{{this.load}}</td>
+          <td style="text-align:right">{{this.km}}</td>
+        </tr>
+      {{/each}}
+    </tbody>
+  </table>
+  <p class="small">Generado por Sistema SG-SST</p>
+</body>
+</html>

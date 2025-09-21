@@ -1,0 +1,82 @@
+{
+  "code": "GO-FO-15",
+  "name": "Inspección preoperacional excavadora sobre orugas",
+  "version": 1,
+  "sections": [
+    {
+      "id": "info",
+      "title": "Datos del equipo / operador",
+      "fields": [
+        { "id": "proyecto", "label": "Proyecto", "type": "text" },
+        { "id": "operador", "label": "Nombre del Operador", "type": "text" },
+        { "id": "equipo", "label": "Equipo", "type": "text" }
+      ]
+    },
+    {
+      "id": "luces",
+      "title": "Estado de las Luces",
+      "type": "checklist",
+      "levels": ["OK","NO","NA"],
+      "items": [
+        { "id": "frontales", "label": "Frontales" },
+        { "id": "traseras_trabajo", "label": "Traseras de trabajo (reflector)" }
+      ]
+    },
+    {
+      "id": "cabina",
+      "title": "Estado de la Cabina",
+      "type": "checklist",
+      "levels": ["OK","NO","NA"],
+      "items": [
+        { "id": "cinturon", "label": "Cinturón de seguridad" },
+        { "id": "extintor", "label": "Extintor de incendios 20 lb." },
+        { "id": "botiquin", "label": "Botiquín de Primeros Auxilios" },
+        { "id": "asiento", "label": "Asiento en buen estado (dispositivos de giro)" },
+        { "id": "indicadores", "label": "Indicadores (hidráulico, refrigerante, tacómetro, corriente, aceite motor)" },
+        { "id": "control_humo", "label": "Control ingreso humo (tubo de escape)" },
+        { "id": "alarma_retroceso", "label": "Alarma de retroceso" },
+        { "id": "escaleras_apoyos", "label": "Escaleras y Apoyos seguros" },
+        { "id": "baterias", "label": "Baterías y cables en buen estado" },
+        { "id": "vidrio_panoramico", "label": "Vidrio panoramico en buen estado" }
+      ]
+    },
+    {
+      "id": "mecanico",
+      "title": "Estado Mecánico",
+      "type": "checklist",
+      "levels": ["OK","NO","NA"],
+      "items": [
+        { "id": "orugas_tensionadas", "label": "Orugas Tensionadas" },
+        { "id": "giro_tornamesa", "label": "Mecanismo de giro Tornamesa" },
+        { "id": "corona_tornamesa", "label": "Corona de Tornamesa en buen estado" },
+        { "id": "mandos_avance", "label": "Mandos de Avance" },
+        { "id": "freno_est", "label": "Mando de estacionamiento" },
+        { "id": "desgarrador_balde", "label": "Estado general desgarrador balde" },
+        { "id": "mandos_levante", "label": "Mandos de levante del brazo" },
+        { "id": "cilindros", "label": "Cilindros en buen estado" },
+        { "id": "comp_motor_aseado", "label": "Compartimientos del motor aseado" },
+        { "id": "mangueras", "label": "Manguera de agua y de alta presión" },
+        { "id": "zapatas", "label": "Zapatas" },
+        { "id": "rodillos", "label": "Rodillos inferiores - superiores" }
+      ]
+    },
+    {
+      "id": "docs",
+      "title": "Documentos del Operador",
+      "fields": [
+        { "id": "cedula", "label": "Registro/Cédula de Ciudadanía", "type": "text" },
+        { "id": "eps", "label": "Afiliación EPS", "type": "text" },
+        { "id": "arl", "label": "Afiliación ARL", "type": "text" }
+      ]
+    },
+    {
+      "id": "resultado",
+      "title": "Resultado",
+      "fields": [
+        { "id": "aprobado", "label": "APROBADO", "type": "select", "options": ["SI","NO"] },
+        { "id": "restricciones", "label": "RESTRICCIONES", "type": "text" },
+        { "id": "vb_hse", "label": "VB° COORDINADOR HSE", "type": "text" }
+      ]
+    }
+  ]
+}
