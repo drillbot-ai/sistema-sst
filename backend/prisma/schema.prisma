@@ -1,0 +1,218 @@
+// Prisma schema for the SST backend. Defines the main data structures for vehicles,
+// drivers, inspections, accidents, contractors and documents. The data model
+// covers the minimum required entities to support the SG‑SST prototype.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enumeración para roles de usuario. Permite implementar RBAC en los
+// diferentes módulos del sistema: conductores (DRIVER), supervisores (SUPERVISOR)
+// y gerentes (MANAGER).
+enum UserRole {
+  DRIVER
+  SUPERVISOR
+  MANAGER
+}
+
+// Usuarios del sistema. Utilizados para autenticación y control de acceso.
+// La contraseña deberá almacenarse de forma cifrada en la base de datos. Los
+// roles permiten restringir operaciones (por ejemplo, solo SUPERVISOR o
+// MANAGER pueden registrar accidentes). Se puede asociar un Driver a un
+// usuario mediante campos en el modelo Driver o a través de otras tablas.
+model User {
+  id            Int            @id @default(autoincrement())
+  email         String         @unique
+  password      String
+  role          UserRole       @default(DRIVER)
+  name          String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  refreshTokens RefreshToken[]
+}
+
+model Vehicle {
+  id          Int          @id @default(autoincrement())
+  plate       String       @unique
+  brand       String?
+  model       String?
+  year        Int?
+  vin         String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  inspections Inspection[]
+  accidents   Accident[]
+  polizas     Poliza[]
+}
+
+model Driver {
+  id          Int          @id @default(autoincrement())
+  firstName   String
+  lastName    String
+  license     String       @unique
+  phone       String?
+  email       String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  inspections Inspection[]
+  accidents   Accident[]
+}
+
+model Inspection {
+  id        Int      @id @default(autoincrement())
+  date      DateTime @default(now())
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id])
+  vehicleId Int
+  driver    Driver?  @relation(fields: [driverId], references: [id])
+  driverId  Int?
+  notes     String?
+  data      Json? // JSON containing the checklist results
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Accident {
+  id          Int      @id @default(autoincrement())
+  date        DateTime @default(now())
+  description String
+  severity    String?
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id])
+  vehicleId   Int
+  driver      Driver?  @relation(fields: [driverId], references: [id])
+  driverId    Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Contractor {
+  id        Int      @id @default(autoincrement())
+  name      String
+  nit       String   @unique
+  contact   String?
+  phone     String?
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Document {
+  id        Int      @id @default(autoincrement())
+  title     String
+  filePath  String
+  type      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Un registro de póliza de seguro o documento afín. Cada póliza está
+// asociada a un vehículo y contiene la información básica necesaria para
+// verificar el cumplimiento normativo. Permite controlar fechas de
+// expedición y vencimiento, así como el valor asegurado y el proveedor.
+model Poliza {
+  id         Int      @id @default(autoincrement())
+  type       String
+  number     String   @unique
+  provider   String?
+  issueDate  DateTime
+  expiryDate DateTime
+  value      Float?
+  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
+  vehicleId  Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Clave y URL del archivo digitalizado almacenado en S3 o almacenamiento
+  // compatible. Estos campos permiten vincular la póliza a un PDF/imagen
+  // adjunta. Si se utiliza almacenamiento local, se pueden dejar vacíos.
+  fileKey String?
+  fileUrl String?
+}
+
+// Registro de una capacitación de SST o HSE. Incluye datos básicos de la
+// sesión y un campo JSON flexible para participantes o asistencia, permitiendo
+// almacenar listas de IDs de colaboradores, descriptores o evidencia de
+// asistencia. Este modelo facilita medir el cumplimiento de las
+// capacitaciones requeridas.
+model Capacitacion {
+  id           Int      @id @default(autoincrement())
+  title        String
+  topic        String?
+  date         DateTime
+  participants Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// Almacena refresh tokens para autenticación con rotación segura.
+// El campo `token` contiene el valor del refresh token (puede estar cifrado
+// o en texto claro según la implementación). Cada token pertenece a un
+// usuario y tiene fecha de expiración. Al utilizarse, se invalida el token
+// anterior y se crea uno nuevo.
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+model Form {
+  id          String        @id @default(cuid())
+  code        String        @unique
+  name        String
+  description String?
+  versions    FormVersion[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model FormVersion {
+  id        String   @id @default(cuid())
+  formId    String
+  form      Form     @relation(fields: [formId], references: [id])
+  version   Int
+  schema    Json
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([formId, version])
+  submissions Submission[]
+}
+
+model Submission {
+  id             String           @id @default(cuid())
+  formVersionId  String
+  formVersion    FormVersion      @relation(fields: [formVersionId], references: [id])
+  status         SubmissionStatus @default(DRAFT)
+  data           Json
+  vehicleId      Int?
+  driverId       Int?
+  createdBy      String?
+  submittedAt    DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  attachments    Attachment[]
+}
+
+model Attachment {
+  id           String     @id @default(cuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id])
+  name         String
+  url          String     // usa presigned S3 en prod
+  mime         String
+  createdAt    DateTime   @default(now())
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}

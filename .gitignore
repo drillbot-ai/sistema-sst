@@ -1,0 +1,27 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-*.log*
+pnpm-debug.log*
+
+# Env
+*.env
+*.env.local
+backend/.env
+frontend/.env
+
+# Build outputs
+backend/dist/
+frontend/.next/
+frontend/out/
+
+# OS/Editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Not required for minimal app
+docs/
+mobile/
+frontend/tests/
+.github/

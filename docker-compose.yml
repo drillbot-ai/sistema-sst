@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    ports:
+      - "5442:5432"
+    environment:
+      POSTGRES_USER: sstadmin
+      POSTGRES_PASSWORD: secret123
+      POSTGRES_DB: sstdb
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+volumes:
+  db-data:
+    driver: local
