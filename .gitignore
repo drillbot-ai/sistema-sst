@@ -20,6 +20,10 @@ frontend/out/
 Thumbs.db
 .vscode/
 
+# Temporary helpers and archives
+backend/test-server.js
+*.zip
+
 # Not required for minimal app
 docs/
 mobile/
