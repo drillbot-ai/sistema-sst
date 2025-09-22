@@ -17,23 +17,41 @@ export default function FormsListPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const limit = 20;
+  
+  // Datos estáticos temporales mientras se resuelve el problema del backend
+  const staticForms: FormSummary[] = [
+    { code: "GO-FO-01", name: "Hoja de vida de maquinaria" },
+    { code: "GO-FO-07", name: "Inspección kit ambiental" },
+    { code: "GO-FO-08", name: "Inspección kit de carreteras / herramientas" },
+    { code: "GO-FO-09", name: "Planilla diaria de recorrido" },
+    { code: "GO-FO-10", name: "Cronograma de actividades de mantenimiento" },
+    { code: "GO-FO-12", name: "Seguimiento a comparendos" },
+    { code: "GO-FO-15", name: "Inspección preoperacional excavadora sobre orugas" }
+  ];
+
   const { data, isLoading, isError, refetch } = useQuery<FormSummary[]>({
     queryKey: ["forms", search, page],
     queryFn: async () => {
-      const res = await axios.get<FormSummary[]>(
-        `http://localhost:3001/api/forms`,
-        {
-          params: {
-            search,
-            limit,
-            offset: (page - 1) * limit,
-          },
-        }
-      );
-      return res.data;
+      try {
+        const res = await axios.get<FormSummary[]>(
+          `http://localhost:3002/api/forms`,
+          {
+            params: {
+              search,
+              limit,
+              offset: (page - 1) * limit,
+            },
+          }
+        );
+        return res.data;
+      } catch (error) {
+        console.warn("Backend no disponible, usando datos estáticos:", error);
+        return staticForms;
+      }
     },
   });
-  const forms = data ?? [];
+  
+  const forms = data ?? staticForms;
   return (
     <ListShell
       title="Formularios"

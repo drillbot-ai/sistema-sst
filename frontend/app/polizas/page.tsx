@@ -28,7 +28,7 @@ export default function PolizasPage() {
     queryKey: ["polizas", search, page],
     queryFn: async () => {
       const res = await axios.get<Poliza[]>(
-        `http://localhost:3001/api/polizas`,
+        `http://localhost:3002/api/polizas`,
         {
           params: {
             search,

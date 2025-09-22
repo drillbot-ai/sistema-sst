@@ -4,6 +4,12 @@ REM Ejecuta la base de datos, el backend y el frontend en ventanas separadas.
 
 echo Preparando el entorno del Sistema SG‑SST...
 
+REM 0. Liberar puertos comunes (3002 backend, 3000/3001 frontend)
+echo Liberando puertos 3002, 3001 y 3000 si están en uso...
+for %%P in (3002 3001 3000) do (
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $p=(Get-NetTCPConnection -State Listen -LocalPort %%P -ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess; if ($p) { Write-Host 'Matando PID' $p 'en puerto' %%P; Stop-Process -Id $p -Force -ErrorAction SilentlyContinue } } catch { }"
+)
+
 REM 1. Verificar archivo de entorno. Si no existe .env en backend, copiar ejemplo
 IF NOT EXIST backend\.env (
   echo Copiando archivo .env de ejemplo...
@@ -32,6 +38,9 @@ IF EXIST prisma\schema.prisma (
   call npx prisma generate
   echo Aplicando migraciones de Prisma...
   call npx prisma migrate deploy
+  REM Ejecutar el seed para cargar formularios dinámicos en la base de datos
+  echo Cargando datos iniciales...
+  call npm run db:seed
 )
 popd
 
@@ -45,12 +54,15 @@ popd
 
 REM 5. Lanzar servidores en nuevas ventanas de consola
 echo Iniciando servicios...
-start "SST Backend" cmd /k "cd backend && npm run dev"
+REM Establecer puerto del backend a 3002 (coincide con el código)
+set "PORT=3002"
+REM Preferimos ejecutar la versión compilada para mayor estabilidad
+start "SST Backend" cmd /k "cd backend && npm run build && npm start"
 start "SST Frontend" cmd /k "cd frontend && npm run dev"
 
 echo.
 echo Sistema iniciado correctamente.
-echo El backend se ejecuta en http://localhost:3001 y el frontend en http://localhost:3000
+echo El backend se ejecuta en http://localhost:3002 y el frontend en http://localhost:3000
 echo Para detener los servicios presione Ctrl+C en cada ventana o ejecute docker-compose down.
 
 :end

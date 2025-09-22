@@ -27,7 +27,7 @@ app.use(cors());
 app.use(bodyParser.json());
 
 // Swagger documentation
-setupSwagger(app);
+// setupSwagger(app);
 
 // Mount forms router at /api for dynamic form operations
 app.use('/api', formsRouter);
@@ -117,7 +117,7 @@ app.get('/api/vehicles', async (req: Request, res: Response) => {
   const offset = req.query.offset ? parseInt(String(req.query.offset)) : 0;
   const search = req.query.search ? String(req.query.search) : '';
   const where = search
-    ? { plate: { contains: search, mode: 'insensitive' } }
+    ? { plate: { contains: search, mode: 'insensitive' as const } }
     : undefined;
   const vehicles = await prisma.vehicle.findMany({ take: limit, skip: offset, where });
   res.json(vehicles);
@@ -162,8 +162,8 @@ app.get('/api/inspections', async (req: Request, res: Response) => {
   const where = search
     ? {
         OR: [
-          { notes: { contains: search, mode: 'insensitive' } },
-          { vehicle: { plate: { contains: search, mode: 'insensitive' } } },
+          { notes: { contains: search, mode: 'insensitive' as const } },
+          { vehicle: { plate: { contains: search, mode: 'insensitive' as const } } },
         ],
       }
     : undefined;
@@ -194,8 +194,8 @@ app.get('/api/accidents', async (req: Request, res: Response) => {
   const where = search
     ? {
         OR: [
-          { description: { contains: search, mode: 'insensitive' } },
-          { vehicle: { plate: { contains: search, mode: 'insensitive' } } },
+          { description: { contains: search, mode: 'insensitive' as const } },
+          { vehicle: { plate: { contains: search, mode: 'insensitive' as const } } },
         ],
       }
     : undefined;
@@ -224,7 +224,7 @@ app.get('/api/contractors', async (req: Request, res: Response) => {
   const offset = req.query.offset ? parseInt(String(req.query.offset)) : 0;
   const search = req.query.search ? String(req.query.search) : '';
   const where = search
-    ? { OR: [ { name: { contains: search, mode: 'insensitive' } }, { nit: { contains: search, mode: 'insensitive' } } ] }
+    ? { OR: [ { name: { contains: search, mode: 'insensitive' as const } }, { nit: { contains: search, mode: 'insensitive' as const } } ] }
     : undefined;
   const contractors = await prisma.contractor.findMany({ take: limit, skip: offset, where });
   res.json(contractors);
@@ -262,8 +262,8 @@ app.get('/api/polizas', async (req: Request, res: Response) => {
   const where = search
     ? {
         OR: [
-          { number: { contains: search, mode: 'insensitive' } },
-          { vehicle: { plate: { contains: search, mode: 'insensitive' } } },
+          { number: { contains: search, mode: 'insensitive' as const } },
+          { vehicle: { plate: { contains: search, mode: 'insensitive' as const } } },
         ],
       }
     : undefined;
@@ -317,7 +317,7 @@ app.get('/api/capacitaciones', async (req: Request, res: Response) => {
   const offset = req.query.offset ? parseInt(String(req.query.offset)) : 0;
   const search = req.query.search ? String(req.query.search) : '';
   const where = search
-    ? { title: { contains: search, mode: 'insensitive' } }
+    ? { title: { contains: search, mode: 'insensitive' as const } }
     : undefined;
   const caps = await prisma.capacitacion.findMany({ take: limit, skip: offset, where });
   res.json(caps);
@@ -398,7 +398,7 @@ app.get('/api/reports/accident/:id', async (req: Request, res: Response) => {
 });
 
 // Start server
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 3002;
 app.listen(port, () => {
   console.log(`SST backend listening on port ${port}`);
 });

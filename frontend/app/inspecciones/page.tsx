@@ -24,7 +24,7 @@ export default function InspectionsPage() {
     queryKey: ["inspections", search, page],
     queryFn: async () => {
       const res = await axios.get<Inspection[]>(
-        `http://localhost:3001/api/inspections`,
+        `http://localhost:3002/api/inspections`,
         {
           params: {
             search,

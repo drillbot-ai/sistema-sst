@@ -15,7 +15,7 @@ export default function MetricsPage() {
   const { data, isLoading, error } = useQuery<Metrics>({
     queryKey: ['metrics'],
     queryFn: async () => {
-      const res = await axios.get<Metrics>('http://localhost:3001/api/metrics');
+      const res = await axios.get<Metrics>('http://localhost:3002/api/metrics');
       return res.data;
     },
   });

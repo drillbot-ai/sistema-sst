@@ -28,7 +28,7 @@ export default function FormCapturePage() {
     queryKey: ["form", code],
     queryFn: async () => {
       const res = await axios.get<FormDetails>(
-        `http://localhost:3001/api/forms/${code}`
+        `http://localhost:3002/api/forms/${code}`
       );
       return res.data;
     },
@@ -37,7 +37,7 @@ export default function FormCapturePage() {
   const createSubmission = useMutation({
     mutationFn: async (data: any) => {
       const res = await axios.post(
-        `http://localhost:3001/api/forms/${code}/submissions`,
+        `http://localhost:3002/api/forms/${code}/submissions`,
         { data }
       );
       return res.data;

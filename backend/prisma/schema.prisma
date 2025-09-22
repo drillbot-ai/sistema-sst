@@ -33,6 +33,7 @@ model User {
   name      String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  refreshTokens RefreshToken[]
 }
 
 model Vehicle {
@@ -46,6 +47,7 @@ model Vehicle {
   updatedAt DateTime  @updatedAt
   inspections Inspection[]
   accidents  Accident[]
+  polizas   Poliza[]
 }
 
 model Driver {
@@ -192,6 +194,7 @@ model FormVersion {
   schema    Json     // JSON schema describing sections, fields, types and options
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
+  submissions Submission[]
 
   @@unique([formId, version])
 }

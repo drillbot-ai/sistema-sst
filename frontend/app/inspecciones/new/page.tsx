@@ -21,7 +21,7 @@ export default function NewInspectionPage() {
     if (!plate) return alert('Debe ingresar la placa');
     try {
       await axios.post(
-        'http://localhost:3001/api/inspections',
+        'http://localhost:3002/api/inspections',
         { vehicle: { connect: { plate } }, notes },
         { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
       );

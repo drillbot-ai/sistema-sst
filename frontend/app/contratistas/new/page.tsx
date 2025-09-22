@@ -27,7 +27,7 @@ export default function NewContractorPage() {
         phone: phone || undefined,
         email: email || undefined,
       };
-      await axios.post('http://localhost:3001/api/contractors', payload, {
+      await axios.post('http://localhost:3002/api/contractors', payload, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       router.push('/contratistas');

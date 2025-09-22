@@ -24,7 +24,7 @@ export default function AccidentsPage() {
     queryKey: ["accidents", search, page],
     queryFn: async () => {
       const res = await axios.get<Accident[]>(
-        `http://localhost:3001/api/accidents`,
+        `http://localhost:3002/api/accidents`,
         {
           params: {
             search,

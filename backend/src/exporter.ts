@@ -29,7 +29,7 @@ export async function renderPdf(submissionId: string): Promise<Buffer> {
   const templateString = fs.readFileSync(templatePath, 'utf8');
   const template = Handlebars.compile(templateString);
   const html = template({ code, version: sub.formVersion.version, data: sub.data, dateNow: dayjs().format('YYYY-MM-DD HH:mm') });
-  const browser = await puppeteer.launch({ headless: 'new' });
+  const browser = await puppeteer.launch({ headless: true });
   const page = await browser.newPage();
   await page.setContent(html, { waitUntil: 'networkidle0' });
   const pdf = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '12mm', right: '12mm', bottom: '16mm', left: '12mm' } });

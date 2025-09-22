@@ -28,7 +28,7 @@ export default function VehiclesPage() {
     queryKey: ["vehicles", search, page],
     queryFn: async () => {
       const res = await axios.get<Vehicle[]>(
-        `http://localhost:3001/api/vehicles`,
+        `http://localhost:3002/api/vehicles`,
         {
           params: {
             search,

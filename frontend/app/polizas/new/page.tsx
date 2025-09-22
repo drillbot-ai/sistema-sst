@@ -32,7 +32,7 @@ export default function NewPolizaPage() {
     async function loadVehicles() {
       try {
         const res = await axios.get<Vehicle[]>(
-          'http://localhost:3001/api/vehicles?limit=100&offset=0',
+          'http://localhost:3002/api/vehicles?limit=100&offset=0',
         );
         setVehicles(res.data);
       } catch {
@@ -58,7 +58,7 @@ export default function NewPolizaPage() {
         value: value ? parseFloat(value) : undefined,
         vehicleId: parseInt(vehicleId),
       };
-      await axios.post('http://localhost:3001/api/polizas', payload, {
+      await axios.post('http://localhost:3002/api/polizas', payload, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       router.push('/polizas');

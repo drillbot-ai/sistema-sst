@@ -30,7 +30,7 @@ export default function NewCapacitacionPage() {
         date,
         participants: parts.length > 0 ? parts : undefined,
       };
-      await axios.post('http://localhost:3001/api/capacitaciones', payload, {
+      await axios.post('http://localhost:3002/api/capacitaciones', payload, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       router.push('/capacitaciones');

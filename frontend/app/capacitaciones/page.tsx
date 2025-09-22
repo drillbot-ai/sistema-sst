@@ -23,7 +23,7 @@ export default function TrainingsPage() {
     queryKey: ["trainings", search, page],
     queryFn: async () => {
       const res = await axios.get<Training[]>(
-        `http://localhost:3001/api/capacitaciones`,
+        `http://localhost:3002/api/capacitaciones`,
         {
           params: {
             search,

@@ -24,7 +24,7 @@ export default function MaintenancesPage() {
     queryKey: ["maintenances", search, page],
     queryFn: async () => {
       const res = await axios.get<Maintenance[]>(
-        `http://localhost:3001/api/maintenances`,
+        `http://localhost:3002/api/maintenances`,
         {
           params: {
             search,

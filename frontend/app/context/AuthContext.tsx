@@ -59,7 +59,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (currentRefresh) {
       // revoke refresh token on the server
       try {
-        await fetch('http://localhost:3001/api/auth/logout', {
+        await fetch('http://localhost:3002/api/auth/logout', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken: currentRefresh }),
@@ -74,7 +74,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const refresh = async () => {
     if (!refreshToken) return;
     try {
-      const res = await fetch('http://localhost:3001/api/auth/refresh', {
+      const res = await fetch('http://localhost:3002/api/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),

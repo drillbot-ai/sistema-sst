@@ -22,7 +22,7 @@ export default function NewAccidentPage() {
     if (!plate || !description) return alert('Placa y descripción son obligatorias');
     try {
       await axios.post(
-        'http://localhost:3001/api/accidents',
+        'http://localhost:3002/api/accidents',
         { description, severity, vehicle: { connect: { plate } } },
         { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
       );

@@ -19,7 +19,7 @@ export default function FormSubmissionsPage() {
     queryKey: ["formSubs", code],
     queryFn: async () => {
       const res = await axios.get<Submission[]>(
-        `http://localhost:3001/api/forms/${code}/submissions`
+        `http://localhost:3002/api/forms/${code}/submissions`
       );
       return res.data;
     },
@@ -79,14 +79,14 @@ export default function FormSubmissionsPage() {
                   </td>
                   <td className="px-3 py-2">
                     <Link
-                      href={`http://localhost:3001/api/submissions/${sub.id}/pdf`}
+                      href={`http://localhost:3002/api/submissions/${sub.id}/pdf`}
                       target="_blank"
                       className="btn"
                     >
                       PDF
                     </Link>
                     <Link
-                      href={`http://localhost:3001/api/submissions/${sub.id}/xlsx`}
+                      href={`http://localhost:3002/api/submissions/${sub.id}/xlsx`}
                       target="_blank"
                       className="btn ml-2"
                     >

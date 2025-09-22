@@ -27,7 +27,7 @@ export default function ContractorsPage() {
     queryKey: ["contractors", search, page],
     queryFn: async () => {
       const res = await axios.get<Contractor[]>(
-        `http://localhost:3001/api/contractors`,
+        `http://localhost:3002/api/contractors`,
         {
           params: {
             search,

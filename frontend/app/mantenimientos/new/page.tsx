@@ -21,7 +21,7 @@ export default function NewMaintenancePage() {
     if (!plate || !description) return alert('Placa y descripción son obligatorias');
     try {
       await axios.post(
-        'http://localhost:3001/api/inspections',
+        'http://localhost:3002/api/inspections',
         { vehicle: { connect: { plate } }, notes: `MANTENIMIENTO: ${description}` },
         { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
       );
