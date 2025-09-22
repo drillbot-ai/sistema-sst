@@ -54,11 +54,10 @@ popd
 
 REM 5. Lanzar servidores en nuevas ventanas de consola
 echo Iniciando servicios...
-REM Establecer puerto del backend a 3002 (coincide con el código)
-set "PORT=3002"
-REM Preferimos ejecutar la versión compilada para mayor estabilidad
-start "SST Backend" cmd /k "cd backend && npm run build && npm start"
-start "SST Frontend" cmd /k "cd frontend && npm run dev"
+REM Lanzar backend con PORT=3002 en su propia ventana (aislar variable de entorno)
+start "SST Backend" cmd /k "cd backend && set PORT=3002 && npm run build && npm start"
+REM Lanzar frontend en su propia ventana, por defecto Next usa 3000; si fuese necesario, fijar PORT=3000
+start "SST Frontend" cmd /k "cd frontend && set PORT=3000 && npm run dev"
 
 echo.
 echo Sistema iniciado correctamente.
