@@ -247,9 +247,39 @@ export default function VehiclesPage() {
       setEditingVehicle({ id });
       setInitialFormValues(init);
       setIsModalOpen(true);
-    } catch (e) {
-      alert('No se pudo cargar el detalle del vehículo para editar');
-      console.error(e);
+    } catch (e: any) {
+      console.error('Fallo detalle, usando fallback vehicle+company:', e?.response?.data || e);
+      try {
+        const [vehRes, compRes] = await Promise.all([
+          axios.get(`http://localhost:3002/api/vehicles/${id}`),
+          axios.get('http://localhost:3002/api/company').catch(() => ({ data: {} })),
+        ]);
+        const vehicle = vehRes.data || {};
+        const company = compRes.data || {};
+        const init = {
+          serialNumber: vehicle?.vin ?? '',
+          brand: vehicle?.brand ?? '',
+          manufacturingYear: vehicle?.year ?? null,
+          model: vehicle?.model ?? '',
+          plate: vehicle?.plate ?? '',
+          ownerCompany: company?.name ?? '',
+          ownerNit: company?.nit ?? '',
+          ownerAddress: company?.address ?? '',
+          ownerNeighborhood: company?.neighborhood ?? '',
+          ownerPhone: company?.phone ?? '',
+          ownerMobile: company?.mobile ?? '',
+          ownerCity: company?.city ?? '',
+          ownerMunicipality: (company as any)?.municipality ?? '',
+          ownerSummary: company?.name ?? '',
+        };
+        setEditingVehicle({ id });
+        setInitialFormValues(init);
+        setIsModalOpen(true);
+      } catch (err: any) {
+        const msg = err?.response?.data?.message || e?.response?.data?.message || 'Error desconocido';
+        alert(`No se pudo cargar el detalle del vehículo para editar: ${msg}`);
+        console.error('Fallback tambien falló:', err?.response?.data || err);
+      }
     }
   };
 
