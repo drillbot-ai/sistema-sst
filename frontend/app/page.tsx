@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import ListShell from "../components/ListShell";
@@ -22,6 +22,8 @@ export default function VehiclesPage() {
   const [page, setPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [openDownloadMenuId, setOpenDownloadMenuId] = useState<number | null>(null);
+  const [editingVehicle, setEditingVehicle] = useState<null | { id: number }>(null);
+  const [initialFormValues, setInitialFormValues] = useState<any>(null);
   const limit = 10;
   const queryClient = useQueryClient();
   const {
@@ -103,6 +105,174 @@ export default function VehiclesPage() {
     await createVehicleMutation.mutateAsync(payload);
   };
 
+  // Helper: map form values to submission.data shape used by backend exports
+  const buildSubmissionPayload = (data: any) => {
+    return {
+      identification: {
+        serialNumber: data.serialNumber || '',
+        brand: data.brand || '',
+        year: data.manufacturingYear ?? data.year ?? '',
+        registrationDate: data.registrationDate || '',
+        model: data.model || '',
+        color: data.color || '',
+        motorNumber: data.motorNumber || '',
+        fuel: data.fuel || '',
+        line: data.line || '',
+        series: data.series || '',
+        vehicleClass: data.vehicleClass || '',
+        customsManifest: data.customsManifest || '',
+        registrationCard: data.registrationCard || '',
+        mileage: data.mileage || '',
+        plate: (data.plate ?? '').trim(),
+      },
+      owner: {
+        ownerCompany: data.ownerCompany || '',
+        ownerNit: data.ownerNit || '',
+        ownerAddress: data.ownerAddress || '',
+        ownerNeighborhood: data.ownerNeighborhood || '',
+        ownerPhone: data.ownerPhone || '',
+        ownerMobile: data.ownerMobile || '',
+        ownerCity: data.ownerCity || '',
+        ownerMunicipality: data.ownerMunicipality || '',
+      },
+      updatedBy: Array.isArray(data.updatedBy) ? data.updatedBy : [],
+      vehiclePhoto: data.vehiclePhoto || '',
+      documents: Array.isArray(data.documents) ? data.documents : [],
+      maintenanceHistory: Array.isArray(data.maintenanceHistory) ? data.maintenanceHistory : [],
+    };
+  };
+
+  // Update (edit) mutation: update base vehicle and form submission
+  const updateVehicleMutation = useMutation({
+    mutationFn: async (payload: { id: number; base: any; form: any }) => {
+      const { id, base, form } = payload;
+      await axios.put(`http://localhost:3002/api/vehicles/${id}`, base);
+      await axios.put(`http://localhost:3002/api/vehicles/${id}/form`, form);
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+      setIsModalOpen(false);
+      setEditingVehicle(null);
+      setInitialFormValues(null);
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Error al actualizar el vehículo';
+      alert(`No se pudo actualizar el vehículo: ${msg}`);
+      console.error('Update vehicle error:', err?.response?.data || err);
+    }
+  });
+
+  const handleEditVehicle = async (data: any) => {
+    if (!editingVehicle) return;
+    const base = {
+      plate: (data.plate ?? '').trim(),
+      brand: data.brand || undefined,
+      model: data.model || undefined,
+      year: data.manufacturingYear ?? data.year ?? undefined,
+      vin: data.serialNumber || undefined,
+    };
+    const form = buildSubmissionPayload(data);
+    await updateVehicleMutation.mutateAsync({ id: editingVehicle.id, base, form });
+  };
+
+  // Open create modal: prefill owner from default company
+  const openCreateModal = async () => {
+    try {
+      setEditingVehicle(null);
+      setInitialFormValues(null);
+      const res = await axios.get('http://localhost:3002/api/company');
+      const company = res.data || {};
+      const ownerDefaults = {
+        ownerCompany: company.name || '',
+        ownerNit: company.nit || '',
+        ownerAddress: company.address || '',
+        ownerNeighborhood: company.neighborhood || '',
+        ownerPhone: company.phone || '',
+        ownerMobile: company.mobile || '',
+        ownerCity: company.city || '',
+        ownerMunicipality: company.municipality || '',
+        ownerSummary: company.name || '',
+      };
+      setInitialFormValues(ownerDefaults);
+    } catch (e) {
+      // Si falla, igual abrimos el modal vacío
+      console.warn('No se pudo cargar la empresa por defecto para prellenar propietario');
+    } finally {
+      setIsModalOpen(true);
+    }
+  };
+
+  // Open edit modal: fetch vehicle detail and map to initial values
+  const openEditModal = async (id: number) => {
+    try {
+      const res = await axios.get(`http://localhost:3002/api/vehicles/${id}/detail`);
+      const { vehicle, company, submission } = res.data || {};
+      const d = submission?.data || {};
+      const ident = d.identification || {};
+      const owner = d.owner || {};
+      const init = {
+        // Vehicle identification
+        serialNumber: ident.serialNumber ?? vehicle?.vin ?? '',
+        brand: ident.brand ?? vehicle?.brand ?? '',
+        manufacturingYear: ident.year ?? vehicle?.year ?? null,
+        registrationDate: ident.registrationDate ?? '',
+        model: ident.model ?? vehicle?.model ?? '',
+        color: ident.color ?? '',
+        motorNumber: ident.motorNumber ?? '',
+        fuel: ident.fuel ?? '',
+        line: ident.line ?? '',
+        series: ident.series ?? '',
+        vehicleClass: ident.vehicleClass ?? '',
+        customsManifest: ident.customsManifest ?? '',
+        registrationCard: ident.registrationCard ?? '',
+        mileage: ident.mileage ?? '',
+        plate: vehicle?.plate ?? '',
+        // Owner: prefer submission, then company
+        ownerCompany: owner.ownerCompany ?? company?.name ?? '',
+        ownerNit: owner.ownerNit ?? company?.nit ?? '',
+        ownerAddress: owner.ownerAddress ?? company?.address ?? '',
+        ownerNeighborhood: owner.ownerNeighborhood ?? company?.neighborhood ?? '',
+        ownerPhone: owner.ownerPhone ?? company?.phone ?? '',
+        ownerMobile: owner.ownerMobile ?? company?.mobile ?? '',
+        ownerCity: owner.ownerCity ?? company?.city ?? '',
+        ownerMunicipality: owner.ownerMunicipality ?? company?.municipality ?? '',
+        ownerSummary: owner.ownerCompany ?? company?.name ?? '',
+        // Extras
+        vehiclePhoto: d.vehiclePhoto ?? '',
+        documents: Array.isArray(d.documents) ? d.documents : [],
+        maintenanceHistory: Array.isArray(d.maintenanceHistory) ? d.maintenanceHistory : [],
+        updatedBy: Array.isArray(d.updatedBy) ? d.updatedBy : [],
+      };
+      setEditingVehicle({ id });
+      setInitialFormValues(init);
+      setIsModalOpen(true);
+    } catch (e) {
+      alert('No se pudo cargar el detalle del vehículo para editar');
+      console.error(e);
+    }
+  };
+
+  // Close download menu on outside click or ESC
+  useEffect(() => {
+    if (openDownloadMenuId == null) return;
+    const onClick = (e: any) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-download-menu="true"]')) {
+        setOpenDownloadMenuId(null);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenDownloadMenuId(null);
+    };
+    document.addEventListener('click', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('click', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [openDownloadMenuId]);
+
   const handleExportVehicle = async (vehicleId: number, format: 'html' | 'excel' | 'pdf') => {
     try {
       let url = '';
@@ -176,7 +346,7 @@ export default function VehiclesPage() {
       actions={
         <div className="flex gap-2">
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={openCreateModal}
             className="btn bg-blue-600 text-white hover:bg-blue-700"
           >
             + Agregar Vehículo
@@ -261,7 +431,7 @@ export default function VehiclesPage() {
                         type="button"
                         className="p-1 rounded hover:bg-gray-100"
                         title="Editar"
-                        onClick={() => setIsModalOpen(true)}
+                        onClick={() => openEditModal(v.id)}
                         aria-label="Editar vehículo"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5 text-gray-700">
@@ -270,7 +440,7 @@ export default function VehiclesPage() {
                         </svg>
                       </button>
                       {/* Download icon with format menu */}
-                      <div className="relative">
+                      <div className="relative" data-download-menu="true">
                         <button
                           type="button"
                           className="p-1 rounded hover:bg-gray-100"
@@ -278,6 +448,7 @@ export default function VehiclesPage() {
                           onClick={() => setOpenDownloadMenuId((prev) => (prev === v.id ? null : v.id))}
                           aria-haspopup="menu"
                           aria-expanded={openDownloadMenuId === v.id}
+                          data-download-menu="true"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5 text-gray-700">
                             <path d="M12 3a1 1 0 0 1 1 1v8.586l2.293-2.293a1 1 0 1 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 1 1 1.414-1.414L11 12.586V4a1 1 0 0 1 1-1Z" />
@@ -285,7 +456,7 @@ export default function VehiclesPage() {
                           </svg>
                         </button>
                         {openDownloadMenuId === v.id && (
-                          <div className="absolute z-10 mt-1 w-36 rounded-md border border-gray-200 bg-white shadow-lg">
+                          <div className="absolute z-50 mt-1 w-36 rounded-md border border-gray-200 bg-white shadow-lg right-0" data-download-menu="true">
                             <button
                               className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
                               onClick={() => { handleExportVehicle(v.id, 'html'); setOpenDownloadMenuId(null); }}
@@ -336,17 +507,18 @@ export default function VehiclesPage() {
         </div>
       </section>
       
-      {/* Modal para agregar vehículo */}
+      {/* Modal para agregar/editar vehículo */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="Agregar Nuevo Vehículo - GO-FO-01"
+        onClose={() => { setIsModalOpen(false); setEditingVehicle(null); setInitialFormValues(null); }}
+        title={`${editingVehicle ? 'Editar Vehículo' : 'Agregar Nuevo Vehículo'} - GO-FO-01`}
         size="xl"
       >
         <VehicleForm
-          onSubmit={handleCreateVehicle}
-          onCancel={() => setIsModalOpen(false)}
-          isLoading={createVehicleMutation.isPending}
+          onSubmit={editingVehicle ? handleEditVehicle : handleCreateVehicle}
+          onCancel={() => { setIsModalOpen(false); setEditingVehicle(null); setInitialFormValues(null); }}
+          isLoading={createVehicleMutation.isPending || updateVehicleMutation.isPending}
+          initialValues={initialFormValues}
         />
       </Modal>
     </ListShell>

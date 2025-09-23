@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 
 interface VehicleFormData {
@@ -77,6 +77,7 @@ interface VehicleFormProps {
   onSubmit: (data: VehicleFormData) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
+  initialValues?: Partial<VehicleFormData>;
 }
 
 const documentTypes = [
@@ -95,10 +96,10 @@ const maintenanceTypes = ["Preventivo", "Correctivo"];
 const fuelTypes = ["Gasolina", "Diesel", "Gas", "Eléctrico", "Híbrido"];
 const vehicleClasses = ["Automóvil", "Camioneta", "Camión", "Motocicleta", "Maquinaria", "Retroexcavadora", "Otro"];
 
-export default function VehicleForm({ onSubmit, onCancel, isLoading = false }: VehicleFormProps) {
+export default function VehicleForm({ onSubmit, onCancel, isLoading = false, initialValues }: VehicleFormProps) {
   const [activeTab, setActiveTab] = useState("vehicle");
   
-  const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<VehicleFormData>({
+  const { register, control, handleSubmit, watch, setValue, formState: { errors }, reset } = useForm<VehicleFormData>({
     defaultValues: {
       serialNumber: "",
       brand: "",
@@ -136,6 +137,48 @@ export default function VehicleForm({ onSubmit, onCancel, isLoading = false }: V
       maintenanceHistory: []
     }
   });
+
+  // Apply initial values when provided (edit mode or company defaults)
+  React.useEffect(() => {
+    if (initialValues && Object.keys(initialValues).length > 0) {
+      reset({
+        serialNumber: initialValues.serialNumber ?? "",
+        brand: initialValues.brand ?? "",
+        manufacturingYear: (initialValues.manufacturingYear as any) ?? (initialValues as any).year ?? null,
+        registrationDate: initialValues.registrationDate ?? "",
+        model: initialValues.model ?? "",
+        color: initialValues.color ?? "",
+        motorNumber: initialValues.motorNumber ?? "",
+        fuel: initialValues.fuel ?? "",
+        line: initialValues.line ?? "",
+        series: initialValues.series ?? "",
+        vehicleClass: initialValues.vehicleClass ?? "",
+        customsManifest: initialValues.customsManifest ?? "",
+        registrationCard: initialValues.registrationCard ?? "",
+        mileage: initialValues.mileage ?? "",
+        plate: initialValues.plate ?? "",
+        registrationNumber: initialValues.registrationNumber ?? "",
+        propertyCard: initialValues.propertyCard ?? "",
+        allRiskPolicy: initialValues.allRiskPolicy ?? "",
+        grumasCertificate: initialValues.grumasCertificate ?? "",
+        machineType: initialValues.machineType ?? "",
+        ownerSummary: initialValues.ownerSummary ?? "",
+        ownerDocument: initialValues.ownerDocument ?? "",
+        ownerCompany: initialValues.ownerCompany ?? "",
+        ownerNit: initialValues.ownerNit ?? "",
+        ownerAddress: initialValues.ownerAddress ?? "",
+        ownerNeighborhood: initialValues.ownerNeighborhood ?? "",
+        ownerPhone: initialValues.ownerPhone ?? "",
+        ownerMobile: initialValues.ownerMobile ?? "",
+        ownerCity: initialValues.ownerCity ?? "",
+        ownerMunicipality: initialValues.ownerMunicipality ?? "",
+        updatedBy: initialValues.updatedBy ?? [],
+        vehiclePhoto: initialValues.vehiclePhoto ?? "",
+        documents: initialValues.documents ?? [],
+        maintenanceHistory: initialValues.maintenanceHistory ?? [],
+      });
+    }
+  }, [initialValues, reset]);
 
   const { fields: documentFields, append: appendDocument, remove: removeDocument } = useFieldArray({
     control,

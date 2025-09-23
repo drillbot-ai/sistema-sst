@@ -673,6 +673,46 @@ app.get('/api/vehicles/:id', async (req: Request, res: Response) => {
   res.json(vehicle);
 });
 
+// Detail: base vehicle + last GO-FO-01 submission + company defaults for owner section
+app.get('/api/vehicles/:id/detail', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    const vehicle = await prisma.vehicle.findUnique({ where: { id } });
+    if (!vehicle) return res.status(404).json({ message: 'Vehicle not found' });
+    const company = await (prisma as any).company.findFirst({ where: { defaultCompany: true } });
+    const form = await prisma.form.findUnique({
+      where: { code: 'GO-FO-01' },
+      include: { versions: { where: { active: true }, include: { submissions: { where: { vehicleId: id }, orderBy: { createdAt: 'desc' }, take: 1 } } } }
+    });
+    const submission = form?.versions?.[0]?.submissions?.[0] || null;
+    res.json({ vehicle, company, submission });
+  } catch (e: any) {
+    res.status(500).json({ message: 'Error fetching vehicle detail', error: e?.message || String(e) });
+  }
+});
+
+// Update or create GO-FO-01 submission for a vehicle (edit form save)
+app.put('/api/vehicles/:id/form', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    const vehicle = await prisma.vehicle.findUnique({ where: { id } });
+    if (!vehicle) return res.status(404).json({ message: 'Vehicle not found' });
+    const form = await prisma.form.findUnique({ where: { code: 'GO-FO-01' }, include: { versions: { where: { active: true } } } });
+    if (!form || form.versions.length === 0) return res.status(404).json({ message: 'Form GO-FO-01 not found' });
+    const versionId = form.versions[0].id;
+    // Upsert submission: if exists latest, update data; else create new
+    const latest = await prisma.submission.findFirst({ where: { formVersionId: versionId, vehicleId: id }, orderBy: { createdAt: 'desc' } });
+    if (latest) {
+      const updated = await prisma.submission.update({ where: { id: latest.id }, data: { data: req.body || {} } });
+      return res.json(updated);
+    }
+    const created = await prisma.submission.create({ data: { formVersionId: versionId, vehicleId: id, status: 'SUBMITTED', data: req.body || {} } });
+    return res.json(created);
+  } catch (e: any) {
+    res.status(400).json({ message: 'Error saving vehicle form', error: e?.message || String(e) });
+  }
+});
+
 app.post('/api/vehicles', async (req: Request, res: Response) => {
   try {
     const body = req.body || {};
