@@ -20,12 +20,14 @@ export default function Navbar() {
         </div>
         <div className="flex items-center gap-2">
           {/* Global search input (non functional placeholder) */}
-          <div className="hidden items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 md:flex">
+          <div className="hidden items-center gap-2 border px-3 py-2 md:flex" style={{ borderColor: 'var(--color-border)', borderRadius: 'var(--radius-base)' }}>
             <input
               type="text"
               placeholder="Buscar…"
               className="w-64 border-none bg-transparent text-sm placeholder-gray-400 focus:outline-none"
               style={{ color: 'var(--color-fg)' }}
+              onFocus={(e) => (e.currentTarget.parentElement!.style.boxShadow = '0 0 0 3px color-mix(in srgb, var(--focus-ring) 30%, transparent)')}
+              onBlur={(e) => (e.currentTarget.parentElement!.style.boxShadow = 'none')}
             />
           </div>
         </div>

@@ -30,9 +30,21 @@ export type ThemeBundle = {
   light: ThemeSettings;
   dark: ThemeSettings;
   presets?: Record<string, ThemeBundlePreset>;
+  components?: ThemeComponents;
+  fontProvider?: 'system' | 'google';
+  googleFont?: string; // e.g., 'Inter' or 'Roboto'
 };
 
 export type ThemeBundlePreset = ThemeBundle;
+
+export type ThemeComponents = {
+  buttonStyle?: 'solid' | 'outline';
+  buttonTextCase?: 'normal' | 'uppercase';
+  inputBorderWidth?: string; // e.g., '1px'
+  focusRingColor?: string; // css color
+  tableStriped?: boolean;
+  tableStripeColor?: string;
+};
 
 const dataDir = path.join(__dirname, '..', '..', 'data');
 const themeFile = path.join(dataDir, 'theme.json');
@@ -71,11 +83,15 @@ export const defaultBundle: ThemeBundle = {
   mode: 'light',
   light: defaultTheme,
   dark: defaultDark,
+  fontProvider: 'system',
+  googleFont: 'Inter',
   presets: {
     default: {
       mode: 'light',
       light: defaultTheme,
       dark: defaultDark,
+      fontProvider: 'system',
+      googleFont: 'Inter',
     },
   },
 };
@@ -116,6 +132,58 @@ export function saveTheme(theme: Partial<ThemeBundle> | Partial<ThemeSettings>):
     merged = { ...current, ...(theme as Partial<ThemeBundle>) };
   }
   ensureDataDir();
+  fs.writeFileSync(themeFile, JSON.stringify(merged, null, 2), 'utf-8');
+  return merged;
+}
+
+export function listPresets(): string[] {
+  const b = loadTheme();
+  return Object.keys(b.presets || {});
+}
+
+export function savePreset(name: string, preset?: ThemeBundlePreset): ThemeBundle {
+  const current = loadTheme();
+  const p = preset || current;
+  const presets = { ...(current.presets || {}), [name]: p };
+  const merged = { ...current, presets };
+  fs.writeFileSync(themeFile, JSON.stringify(merged, null, 2), 'utf-8');
+  return merged;
+}
+
+export function applyPreset(name: string): ThemeBundle | null {
+  const current = loadTheme();
+  const preset = current.presets?.[name];
+  if (!preset) return null;
+  const merged = { ...preset, presets: { ...current.presets } };
+  fs.writeFileSync(themeFile, JSON.stringify(merged, null, 2), 'utf-8');
+  return merged;
+}
+
+export function deletePreset(name: string): ThemeBundle {
+  const current = loadTheme();
+  const presets = { ...(current.presets || {}) };
+  delete presets[name];
+  const merged = { ...current, presets };
+  fs.writeFileSync(themeFile, JSON.stringify(merged, null, 2), 'utf-8');
+  return merged;
+}
+
+export function resetTheme(): ThemeBundle {
+  const base = { ...defaultBundle };
+  ensureDataDir();
+  fs.writeFileSync(themeFile, JSON.stringify(base, null, 2), 'utf-8');
+  return base;
+}
+
+export function exportPreset(name: string): ThemeBundlePreset | null {
+  const current = loadTheme();
+  return current.presets?.[name] ?? null;
+}
+
+export function importPreset(name: string, preset: ThemeBundlePreset): ThemeBundle {
+  const current = loadTheme();
+  const presets = { ...(current.presets || {}), [name]: preset };
+  const merged = { ...current, presets };
   fs.writeFileSync(themeFile, JSON.stringify(merged, null, 2), 'utf-8');
   return merged;
 }

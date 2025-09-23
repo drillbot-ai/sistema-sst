@@ -19,7 +19,7 @@ import { setupSwagger } from './swagger';
 import path from 'path';
 import fs from 'fs';
 import { ensureUploadsDir, uploadsDir, saveDataUrl, localPathFromUrl } from './storage';
-import { loadTheme, saveTheme } from './settings';
+import { loadTheme, saveTheme, listPresets, savePreset, applyPreset as applyThemePreset, deletePreset as deleteThemePreset, resetTheme, exportPreset, importPreset } from './settings';
 // Import the forms router for dynamic form operations
 import formsRouter from './forms';
 
@@ -62,6 +62,81 @@ app.put('/api/settings/theme', (req: Request, res: Response) => {
     res.json(theme);
   } catch (err) {
     res.status(500).json({ message: 'Error saving theme settings', error: err });
+  }
+});
+
+// Theme presets management
+app.get('/api/settings/theme/presets', (_req: Request, res: Response) => {
+  try {
+    res.json({ presets: listPresets() });
+  } catch (err) {
+    res.status(500).json({ message: 'Error listing presets', error: err });
+  }
+});
+
+app.post('/api/settings/theme/presets', (req: Request, res: Response) => {
+  try {
+    const { name, preset } = req.body || {};
+    if (!name || typeof name !== 'string') return res.status(400).json({ message: 'name is required' });
+    const bundle = savePreset(name, preset);
+    res.json(bundle);
+  } catch (err) {
+    res.status(500).json({ message: 'Error saving preset', error: err });
+  }
+});
+
+app.post('/api/settings/theme/presets/:name/apply', (req: Request, res: Response) => {
+  try {
+    const { name } = req.params;
+    const applied = applyThemePreset(name);
+    if (!applied) return res.status(404).json({ message: 'Preset not found' });
+    res.json(applied);
+  } catch (err) {
+    res.status(500).json({ message: 'Error applying preset', error: err });
+  }
+});
+
+app.delete('/api/settings/theme/presets/:name', (req: Request, res: Response) => {
+  try {
+    const { name } = req.params;
+    const bundle = deleteThemePreset(name);
+    res.json(bundle);
+  } catch (err) {
+    res.status(500).json({ message: 'Error deleting preset', error: err });
+  }
+});
+
+app.post('/api/settings/theme/reset', (_req: Request, res: Response) => {
+  try {
+    const bundle = resetTheme();
+    res.json(bundle);
+  } catch (err) {
+    res.status(500).json({ message: 'Error resetting theme', error: err });
+  }
+});
+
+// Export a preset as JSON
+app.get('/api/settings/theme/presets/:name/export', (req: Request, res: Response) => {
+  try {
+    const preset = exportPreset(req.params.name);
+    if (!preset) return res.status(404).json({ message: 'Preset not found' });
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${req.params.name}.json"`);
+    res.send(JSON.stringify(preset, null, 2));
+  } catch (err) {
+    res.status(500).json({ message: 'Error exporting preset', error: err });
+  }
+});
+
+// Import a preset from JSON
+app.post('/api/settings/theme/presets/import', (req: Request, res: Response) => {
+  try {
+    const { name, preset } = req.body || {};
+    if (!name || typeof name !== 'string' || !preset) return res.status(400).json({ message: 'name and preset are required' });
+    const bundle = importPreset(name, preset);
+    res.json(bundle);
+  } catch (err) {
+    res.status(500).json({ message: 'Error importing preset', error: err });
   }
 });
 

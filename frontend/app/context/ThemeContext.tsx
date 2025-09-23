@@ -30,7 +30,20 @@ type ThemeBundle = {
   light: ThemeSettings;
   dark: ThemeSettings;
   presets?: Record<string, ThemeBundle>;
+  components?: ThemeComponents;
+  fontProvider?: 'system' | 'google';
+  googleFont?: string;
 };
+
+// Minimal component theming for later use
+export type ThemeComponents = {
+  buttonStyle?: 'solid' | 'outline';
+  buttonTextCase?: 'normal' | 'uppercase';
+  inputBorderWidth?: string;
+  focusRingColor?: string;
+  tableStriped?: boolean;
+  tableStripeColor?: string;
+}
 
 type ThemeContextType = {
   theme: ThemeSettings;
@@ -39,6 +52,13 @@ type ThemeContextType = {
   setMode: (m: 'light' | 'dark') => Promise<void>;
   bundle: ThemeBundle | null;
   isLoading: boolean;
+  // Presets helpers
+  listPresets: () => Promise<string[]>;
+  savePreset: (name: string) => Promise<void>;
+  applyPreset: (name: string) => Promise<void>;
+  deletePreset: (name: string) => Promise<void>;
+  resetTheme: () => Promise<void>;
+  setFontProvider: (provider: 'system' | 'google', googleFont?: string) => Promise<void>;
 };
 
 const defaultTheme: ThemeSettings = {
@@ -60,7 +80,20 @@ const defaultTheme: ThemeSettings = {
   borderRadius: '0.5rem',
 };
 
-const ThemeContext = createContext<ThemeContextType>({ theme: defaultTheme, mode: 'light', setTheme: async () => {}, setMode: async () => {}, isLoading: true, bundle: null });
+const ThemeContext = createContext<ThemeContextType>({
+  theme: defaultTheme,
+  mode: 'light',
+  setTheme: async () => {},
+  setMode: async () => {},
+  isLoading: true,
+  bundle: null,
+  listPresets: async () => [],
+  savePreset: async () => {},
+  applyPreset: async () => {},
+  deletePreset: async () => {},
+  resetTheme: async () => {},
+  setFontProvider: async () => {},
+});
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [bundle, setBundle] = useState<ThemeBundle | null>(null);
@@ -69,7 +102,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   // Apply CSS variables to document root
-  const applyTheme = (t: ThemeSettings) => {
+  const applyTheme = (t: ThemeSettings, b?: ThemeBundle | null) => {
     const root = document.documentElement;
     root.style.setProperty('--color-primary', t.primaryColor);
     root.style.setProperty('--color-secondary', t.secondaryColor);
@@ -87,22 +120,42 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     root.style.setProperty('--font-family', t.fontFamily);
     root.style.setProperty('--font-size-base', t.baseFontSize);
     root.style.setProperty('--radius-base', t.borderRadius);
+    // component-level vars if provided
+    if (b?.components?.focusRingColor) root.style.setProperty('--focus-ring', b.components.focusRingColor);
+    if (b?.components?.inputBorderWidth) root.style.setProperty('--input-border-w', b.components.inputBorderWidth);
+    if (b?.components?.tableStripeColor) root.style.setProperty('--table-stripe', b.components.tableStripeColor);
   };
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-  const res = await axios.get('http://localhost:3002/api/settings/theme');
-  if (!mounted) return;
-  const b: ThemeBundle = res.data?.mode ? res.data : { mode: 'light', light: res.data, dark: res.data };
-  setBundle(b);
-  setModeState(b.mode || 'light');
-  const pal = (b.mode === 'dark' ? b.dark : b.light) || defaultTheme;
-  setThemeState(pal);
-  applyTheme(pal);
+        const res = await axios.get('http://localhost:3002/api/settings/theme');
+        if (!mounted) return;
+        const b: ThemeBundle = res.data?.mode ? res.data : { mode: 'light', light: res.data, dark: res.data };
+        setBundle(b);
+        setModeState(b.mode || 'light');
+        const pal = (b.mode === 'dark' ? b.dark : b.light) || defaultTheme;
+        setThemeState(pal);
+        applyTheme(pal, b);
+        // Google Fonts loader
+        if (b.fontProvider === 'google' && b.googleFont) {
+          const id = 'theme-google-font';
+          if (!document.getElementById(id)) {
+            const link = document.createElement('link');
+            link.id = id;
+            link.rel = 'stylesheet';
+            const family = encodeURIComponent(b.googleFont + ':wght@400;500;600;700');
+            link.href = `https://fonts.googleapis.com/css2?family=${family}&display=swap`;
+            document.head.appendChild(link);
+          }
+          // prepend the google font to current font family
+          const nameOnly = b.googleFont.split(',')[0];
+          const next = `${nameOnly}, ${pal.fontFamily}`;
+          document.documentElement.style.setProperty('--font-family', next);
+        }
       } catch {
-        applyTheme(theme);
+        applyTheme(theme, bundle);
       } finally {
         setIsLoading(false);
       }
@@ -120,7 +173,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setBundle(updated);
     const pal = updated[mode];
     setThemeState(pal);
-    applyTheme(pal);
+    applyTheme(pal, updated);
     await axios.put('http://localhost:3002/api/settings/theme', updated);
   };
 
@@ -131,11 +184,92 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setBundle(updated);
     const pal = updated[m];
     setThemeState(pal);
-    applyTheme(pal);
+    applyTheme(pal, updated);
     await axios.put('http://localhost:3002/api/settings/theme', updated);
   };
 
-  const value = useMemo(() => ({ theme, mode, setTheme, setMode, isLoading, bundle }), [theme, mode, isLoading, bundle]);
+  // Presets helpers
+  const listPresets = async (): Promise<string[]> => {
+    const res = await axios.get('http://localhost:3002/api/settings/theme/presets');
+    return Array.isArray(res.data?.presets) ? res.data.presets : [];
+  };
+  const savePreset = async (name: string) => {
+    const current = bundle ?? { mode, light: theme, dark: theme } as ThemeBundle;
+    const res = await axios.post('http://localhost:3002/api/settings/theme/presets', { name, preset: current });
+    const b: ThemeBundle = res.data;
+    setBundle(b);
+    const pal = (b.mode === 'dark' ? b.dark : b.light) || theme;
+    setThemeState(pal);
+    applyTheme(pal, b);
+  };
+  const applyPreset = async (name: string) => {
+    const res = await axios.post(`http://localhost:3002/api/settings/theme/presets/${encodeURIComponent(name)}/apply`);
+    const b: ThemeBundle = res.data;
+    setBundle(b);
+    setModeState(b.mode || 'light');
+    const pal = (b.mode === 'dark' ? b.dark : b.light) || theme;
+    setThemeState(pal);
+    applyTheme(pal, b);
+  };
+  const deletePreset = async (name: string) => {
+    const res = await axios.delete(`http://localhost:3002/api/settings/theme/presets/${encodeURIComponent(name)}`);
+    const b: ThemeBundle = res.data;
+    setBundle(b);
+    const pal = (b.mode === 'dark' ? b.dark : b.light) || theme;
+    setThemeState(pal);
+    applyTheme(pal, b);
+  };
+  const resetTheme = async () => {
+    const res = await axios.post('http://localhost:3002/api/settings/theme/reset');
+    const b: ThemeBundle = res.data;
+    setBundle(b);
+    setModeState(b.mode || 'light');
+    const pal = (b.mode === 'dark' ? b.dark : b.light) || defaultTheme;
+    setThemeState(pal);
+    applyTheme(pal, b);
+  };
+
+  // Simple helpers to update font provider and google font choice
+  const setFontProvider = async (provider: 'system' | 'google', googleFont?: string) => {
+    const current = bundle ?? { mode, light: theme, dark: theme } as ThemeBundle;
+    const updated: ThemeBundle = { ...current, fontProvider: provider, googleFont: googleFont ?? current.googleFont };
+    setBundle(updated);
+    const pal = updated[mode];
+    setThemeState(pal);
+    applyTheme(pal, updated);
+    // inject link if needed
+    if (provider === 'google' && updated.googleFont) {
+      const id = 'theme-google-font';
+      if (!document.getElementById(id)) {
+        const link = document.createElement('link');
+        link.id = id;
+        link.rel = 'stylesheet';
+        const family = encodeURIComponent(updated.googleFont + ':wght@400;500;600;700');
+        link.href = `https://fonts.googleapis.com/css2?family=${family}&display=swap`;
+        document.head.appendChild(link);
+      }
+      const nameOnly = updated.googleFont.split(',')[0];
+      const next = `${nameOnly}, ${pal.fontFamily}`;
+      document.documentElement.style.setProperty('--font-family', next);
+    }
+    await axios.put('http://localhost:3002/api/settings/theme', updated);
+  };
+
+  // expose in context by extending value
+  const value = useMemo(() => ({
+    theme,
+    mode,
+    setTheme,
+    setMode,
+    isLoading,
+    bundle,
+    listPresets,
+    savePreset,
+    applyPreset,
+    deletePreset,
+    resetTheme,
+    setFontProvider,
+  }), [theme, mode, isLoading, bundle]);
 
   return (
     <ThemeContext.Provider value={value}>

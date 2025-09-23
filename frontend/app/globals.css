@@ -30,6 +30,41 @@ html, body {
 
 .card { background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-base); }
 
+/* Component variables */
+:root {
+  --focus-ring: var(--color-primary);
+  --input-border-w: 1px;
+  --table-stripe: #f9fafb;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+select,
+textarea {
+  border-width: var(--input-border-w);
+  border-color: var(--color-border);
+  border-radius: var(--radius-base);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 30%, transparent);
+  border-color: var(--focus-ring);
+}
+
+.btn,
+button {
+  border-radius: var(--radius-base);
+}
+
+.table tbody tr:nth-child(2n) td {
+  background-color: var(--table-stripe);
+}
+
 /* Custom design tokens and utility classes for the SG‑SST system */
 :root {
   --bg: 245 245 247; /* stone-100 */

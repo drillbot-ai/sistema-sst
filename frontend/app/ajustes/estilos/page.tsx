@@ -5,12 +5,27 @@ import ListShell from "../../../components/ListShell";
 import { useTheme } from "../../context/ThemeContext";
 
 export default function EstilosPage() {
-  const { theme, setTheme, setMode, mode, isLoading } = useTheme();
+  const { theme, setTheme, setMode, mode, isLoading, listPresets, savePreset, applyPreset, deletePreset, resetTheme, bundle } = useTheme() as any;
   const [activeTab, setActiveTab] = useState<'colors'|'typography'|'components'|'layout'|'presets'>('colors');
   const [local, setLocal] = useState(theme);
+  const [presets, setPresets] = useState<string[]>([]);
+  const [newPresetName, setNewPresetName] = useState('');
+  const [fontProvider, setLocalFontProvider] = useState(bundle?.fontProvider || 'system');
+  const googleFonts = [
+    'Inter', 'Roboto', 'Poppins', 'Open Sans', 'Montserrat', 'Lato', 'Nunito', 'Rubik', 'Source Sans 3'
+  ];
+  const { setFontProvider } = useTheme() as any;
+
   useEffect(() => {
     setLocal(theme);
   }, [theme]);
+
+  useEffect(() => {
+    (async () => {
+      const p = await listPresets().catch(() => []);
+      setPresets(p);
+    })();
+  }, [listPresets]);
 
   const systemFonts = useMemo(() => [
     'Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji"',
@@ -29,6 +44,30 @@ export default function EstilosPage() {
   const handleSave = async () => {
     await setTheme(local);
     alert("Estilos guardados");
+  };
+
+  const handleSavePreset = async () => {
+    const name = newPresetName.trim();
+    if (!name) return;
+    await savePreset(name);
+    const p = await listPresets();
+    setPresets(p);
+    setNewPresetName('');
+  };
+
+  const handleApplyPreset = async (name: string) => {
+    await applyPreset(name);
+  };
+  const handleDeletePreset = async (name: string) => {
+    await deletePreset(name);
+    const p = await listPresets();
+    setPresets(p);
+  };
+
+  const handleReset = async () => {
+    await resetTheme();
+    const p = await listPresets();
+    setPresets(p);
   };
 
   return (
@@ -53,26 +92,66 @@ export default function EstilosPage() {
         <div className="card p-6 space-y-4">
           {activeTab === 'colors' && (
             <>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Color primario</label>
-            <input type="color" value={local.primaryColor} onChange={(e) => handleChange('primaryColor', e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Color secundario</label>
-            <input type="color" value={local.secondaryColor} onChange={(e) => handleChange('secondaryColor', e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Color acento</label>
-            <input type="color" value={local.accentColor} onChange={(e) => handleChange('accentColor', e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fondo</label>
-            <input type="color" value={local.backgroundColor} onChange={(e) => handleChange('backgroundColor', e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Texto</label>
-            <input type="color" value={local.foregroundColor} onChange={(e) => handleChange('foregroundColor', e.target.value)} />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Color primario</label>
+                <input type="color" value={local.primaryColor} onChange={(e) => handleChange('primaryColor', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Color secundario</label>
+                <input type="color" value={local.secondaryColor} onChange={(e) => handleChange('secondaryColor', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Color acento</label>
+                <input type="color" value={local.accentColor} onChange={(e) => handleChange('accentColor', e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Fondo</label>
+                  <input type="color" value={local.backgroundColor} onChange={(e) => handleChange('backgroundColor', e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Texto</label>
+                  <input type="color" value={local.foregroundColor} onChange={(e) => handleChange('foregroundColor', e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Borde</label>
+                  <input type="color" value={local.borderColor ?? '#e5e7eb'} onChange={(e) => handleChange('borderColor' as any, e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Panel</label>
+                  <input type="color" value={local.panelColor ?? '#ffffff'} onChange={(e) => handleChange('panelColor' as any, e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Link</label>
+                  <input type="color" value={local.linkColor ?? '#2563eb'} onChange={(e) => handleChange('linkColor' as any, e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Muted BG</label>
+                  <input type="color" value={local.mutedBgColor ?? '#f9fafb'} onChange={(e) => handleChange('mutedBgColor' as any, e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Muted Text</label>
+                  <input type="color" value={local.mutedTextColor ?? '#6b7280'} onChange={(e) => handleChange('mutedTextColor' as any, e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Success</label>
+                  <input type="color" value={local.successColor ?? '#16a34a'} onChange={(e) => handleChange('successColor' as any, e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Warning</label>
+                  <input type="color" value={local.warningColor ?? '#f59e0b'} onChange={(e) => handleChange('warningColor' as any, e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Error</label>
+                <input type="color" value={local.errorColor ?? '#dc2626'} onChange={(e) => handleChange('errorColor' as any, e.target.value)} />
+              </div>
             </>
           )}
 
@@ -108,7 +187,7 @@ export default function EstilosPage() {
           )}
 
           {activeTab === 'presets' && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-medium text-gray-800">Modo de tema</div>
@@ -119,9 +198,65 @@ export default function EstilosPage() {
                   <button onClick={() => setMode('dark')} className={`px-3 py-2 rounded-md border ${mode==='dark'?'bg-blue-50 border-blue-600 text-blue-700':'bg-white border-gray-300 text-gray-700'}`}>Oscuro</button>
                 </div>
               </div>
-              <div className="text-gray-600 text-sm">Próximamente: gestión de presets (guardar/restaurar y compartir).</div>
+
+              <div>
+                <div className="text-sm font-medium text-gray-800 mb-2">Presets guardados</div>
+                <div className="flex flex-wrap gap-2">
+                  {presets.length === 0 && <div className="text-xs text-gray-500">No hay presets guardados.</div>}
+                  {presets.map((p) => (
+                    <div key={p} className="flex items-center gap-2 border rounded-md px-2 py-1">
+                      <span className="text-sm">{p}</span>
+                      <a className="text-xs text-gray-700" href={`http://localhost:3002/api/settings/theme/presets/${encodeURIComponent(p)}/export`} target="_blank" rel="noreferrer">Exportar</a>
+                      <button onClick={() => handleApplyPreset(p)} className="text-xs text-blue-600">Aplicar</button>
+                      <button onClick={() => handleDeletePreset(p)} className="text-xs text-red-600">Eliminar</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input className="w-48 rounded-md border border-gray-300 px-2 py-1 text-sm" placeholder="Nombre del preset" value={newPresetName} onChange={(e) => setNewPresetName(e.target.value)} />
+                <button onClick={handleSavePreset} className="px-3 py-2 rounded-md text-white" style={{ backgroundColor: 'var(--color-primary)' }}>Guardar preset</button>
+                <button onClick={handleReset} className="px-3 py-2 rounded-md border border-gray-300 text-gray-700">Restablecer por defecto</button>
+              </div>
+
+              <div>
+                <div className="text-sm font-medium text-gray-800 mb-1">Proveedor de fuentes</div>
+                <div className="flex items-center gap-2">
+                  <button onClick={async () => { await setFontProvider('system'); setLocalFontProvider('system'); }} className={`px-3 py-2 rounded-md border ${fontProvider==='system'?'bg-blue-50 border-blue-600 text-blue-700':'bg-white border-gray-300 text-gray-700'}`}>Sistema</button>
+                  <button onClick={async () => { await setFontProvider('google', bundle?.googleFont || 'Inter'); setLocalFontProvider('google'); }} className={`px-3 py-2 rounded-md border ${fontProvider==='google'?'bg-blue-50 border-blue-600 text-blue-700':'bg-white border-gray-300 text-gray-700'}`}>Google</button>
+                  {fontProvider === 'google' && (
+                    <select className="ml-2 rounded-md border border-gray-300 px-2 py-1 text-sm" defaultValue={bundle?.googleFont || 'Inter'} onChange={async (e) => {
+                      await setFontProvider('google', e.target.value);
+                    }}>
+                      {googleFonts.map((g) => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <a className="px-3 py-2 rounded-md border border-gray-300 text-gray-700" href={`http://localhost:3002/api/settings/theme/presets/${encodeURIComponent('default')}/export`} target="_blank" rel="noreferrer">Exportar preset 'default'</a>
+                <label className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 cursor-pointer">
+                  Importar preset
+                  <input type="file" accept="application/json" className="hidden" onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const text = await f.text();
+                    try {
+                      const preset = JSON.parse(text);
+                      const name = prompt('Nombre para el preset importado:', 'importado');
+                      if (!name) return;
+                      await fetch('http://localhost:3002/api/settings/theme/presets/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, preset }) });
+                      const p = await listPresets();
+                      setPresets(p);
+                    } catch {}
+                  }} />
+                </label>
+              </div>
             </div>
           )}
+
           <div className="pt-2">
             <button onClick={handleSave} disabled={isLoading} className="px-3 py-2 rounded-md text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
               Guardar estilos
