@@ -5,16 +5,21 @@ import ListShell from "../../../components/ListShell";
 import { useTheme } from "../../context/ThemeContext";
 
 export default function EstilosPage() {
-  const { theme, setTheme, setMode, mode, isLoading, listPresets, savePreset, applyPreset, deletePreset, resetTheme, bundle } = useTheme() as any;
+  const { theme, setTheme, setMode, mode, isLoading, listPresets, savePreset, applyPreset, deletePreset, resetTheme, bundle, setFontProvider, setComponents, setLayout, renamePreset, duplicatePreset } = useTheme() as any;
   const [activeTab, setActiveTab] = useState<'colors'|'typography'|'components'|'layout'|'presets'>('colors');
   const [local, setLocal] = useState(theme);
   const [presets, setPresets] = useState<string[]>([]);
   const [newPresetName, setNewPresetName] = useState('');
   const [fontProvider, setLocalFontProvider] = useState(bundle?.fontProvider || 'system');
+  const [localComp, setLocalComp] = useState<any>(bundle?.components || {});
+  const [localLayout, setLocalLayout] = useState<any>(bundle?.layout || {});
+  const [renameFrom, setRenameFrom] = useState<string>('');
+  const [renameTo, setRenameTo] = useState<string>('');
+  const [dupFrom, setDupFrom] = useState<string>('');
+  const [dupTo, setDupTo] = useState<string>('');
   const googleFonts = [
     'Inter', 'Roboto', 'Poppins', 'Open Sans', 'Montserrat', 'Lato', 'Nunito', 'Rubik', 'Source Sans 3'
   ];
-  const { setFontProvider } = useTheme() as any;
 
   useEffect(() => {
     setLocal(theme);
@@ -26,6 +31,12 @@ export default function EstilosPage() {
       setPresets(p);
     })();
   }, [listPresets]);
+
+  useEffect(() => {
+    setLocalComp(bundle?.components || {});
+    setLocalLayout(bundle?.layout || {});
+    setLocalFontProvider(bundle?.fontProvider || 'system');
+  }, [bundle]);
 
   const systemFonts = useMemo(() => [
     'Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji"',
@@ -42,7 +53,11 @@ export default function EstilosPage() {
   };
 
   const handleSave = async () => {
+    // Persist palette/typography
     await setTheme(local);
+    // Persist component and layout tokens
+    if (localComp) await setComponents(localComp);
+    if (localLayout) await setLayout(localLayout);
     alert("Estilos guardados");
   };
 
@@ -175,15 +190,121 @@ export default function EstilosPage() {
               <input className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" value={local.borderRadius} onChange={(e) => handleChange('borderRadius', e.target.value)} placeholder="0.5rem" />
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Interlineado (line-height)</label>
+              <input className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" value={local.lineHeight || ''} onChange={(e) => handleChange('lineHeight' as any, e.target.value)} placeholder="1.5" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Espaciado de letras</label>
+              <input className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" value={local.letterSpacing || ''} onChange={(e) => handleChange('letterSpacing' as any, e.target.value)} placeholder="0px" />
+            </div>
+          </div>
             </>
           )}
 
           {activeTab === 'components' && (
-            <div className="text-gray-600 text-sm">Próximamente: configuración de botones, inputs, cards, tablas, etc.</div>
+            <>
+              <div className="text-sm font-medium text-gray-800">Botones</div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Estilo</label>
+                  <select className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm" value={localComp.buttonStyle || 'solid'} onChange={(e) => setLocalComp({ ...localComp, buttonStyle: e.target.value })}>
+                    <option value="solid">Sólido</option>
+                    <option value="outline">Contorno</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Mayúsculas</label>
+                  <select className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm" value={localComp.buttonTextCase || 'normal'} onChange={(e) => setLocalComp({ ...localComp, buttonTextCase: e.target.value })}>
+                    <option value="normal">Normal</option>
+                    <option value="uppercase">Mayúsculas</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Radio</label>
+                  <input className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm" value={localComp.buttonRadius || ''} onChange={(e) => setLocalComp({ ...localComp, buttonRadius: e.target.value })} placeholder="0.5rem" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Padding X</label>
+                  <input className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm" value={localComp.buttonPaddingX || ''} onChange={(e) => setLocalComp({ ...localComp, buttonPaddingX: e.target.value })} placeholder="0.75rem" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Padding Y</label>
+                  <input className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm" value={localComp.buttonPaddingY || ''} onChange={(e) => setLocalComp({ ...localComp, buttonPaddingY: e.target.value })} placeholder="0.5rem" />
+                </div>
+              </div>
+
+              <div className="text-sm font-medium text-gray-800 mt-4">Inputs</div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Ancho de borde</label>
+                  <input className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm" value={localComp.inputBorderWidth || ''} onChange={(e) => setLocalComp({ ...localComp, inputBorderWidth: e.target.value })} placeholder="1px" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Radio</label>
+                  <input className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm" value={localComp.inputRadius || ''} onChange={(e) => setLocalComp({ ...localComp, inputRadius: e.target.value })} placeholder="0.375rem" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Focus ring</label>
+                  <input type="color" value={localComp.focusRingColor || '#3b82f6'} onChange={(e) => setLocalComp({ ...localComp, focusRingColor: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Padding X</label>
+                  <input className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm" value={localComp.inputPaddingX || ''} onChange={(e) => setLocalComp({ ...localComp, inputPaddingX: e.target.value })} placeholder="0.75rem" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Padding Y</label>
+                  <input className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm" value={localComp.inputPaddingY || ''} onChange={(e) => setLocalComp({ ...localComp, inputPaddingY: e.target.value })} placeholder="0.5rem" />
+                </div>
+              </div>
+
+              <div className="text-sm font-medium text-gray-800 mt-4">Tablas</div>
+              <div className="grid grid-cols-2 gap-4 items-center">
+                <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <input type="checkbox" checked={!!localComp.tableStriped} onChange={(e) => setLocalComp({ ...localComp, tableStriped: e.target.checked })} />
+                  Filas en cebra
+                </label>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Color cebra</label>
+                  <input type="color" value={localComp.tableStripeColor || '#f3f4f6'} onChange={(e) => setLocalComp({ ...localComp, tableStripeColor: e.target.value })} />
+                </div>
+              </div>
+            </>
           )}
 
           {activeTab === 'layout' && (
-            <div className="text-gray-600 text-sm">Próximamente: densidad, espaciados, contenedores y breakpoints.</div>
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Ancho máximo de contenido</label>
+                  <input className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" value={localLayout.contentMaxWidth || ''} onChange={(e) => setLocalLayout({ ...localLayout, contentMaxWidth: e.target.value })} placeholder="1200px o 80rem" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Ancho de la barra lateral</label>
+                  <input className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" value={localLayout.sidebarWidth || ''} onChange={(e) => setLocalLayout({ ...localLayout, sidebarWidth: e.target.value })} placeholder="260px" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Unidad de espaciado</label>
+                  <input className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" value={localLayout.spacingUnit || ''} onChange={(e) => setLocalLayout({ ...localLayout, spacingUnit: e.target.value })} placeholder="8px" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Sombra de tarjetas</label>
+                  <select className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" value={localLayout.cardShadow || 'md'} onChange={(e) => setLocalLayout({ ...localLayout, cardShadow: e.target.value })}>
+                    <option value="none">Sin sombra</option>
+                    <option value="sm">Pequeña</option>
+                    <option value="md">Media</option>
+                    <option value="lg">Grande</option>
+                  </select>
+                </div>
+              </div>
+            </>
           )}
 
           {activeTab === 'presets' && (
@@ -218,6 +339,41 @@ export default function EstilosPage() {
                 <input className="w-48 rounded-md border border-gray-300 px-2 py-1 text-sm" placeholder="Nombre del preset" value={newPresetName} onChange={(e) => setNewPresetName(e.target.value)} />
                 <button onClick={handleSavePreset} className="px-3 py-2 rounded-md text-white" style={{ backgroundColor: 'var(--color-primary)' }}>Guardar preset</button>
                 <button onClick={handleReset} className="px-3 py-2 rounded-md border border-gray-300 text-gray-700">Restablecer por defecto</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="border rounded-md p-3">
+                  <div className="text-sm font-medium text-gray-800 mb-2">Renombrar preset</div>
+                  <div className="flex items-center gap-2">
+                    <select className="rounded-md border border-gray-300 px-2 py-1 text-sm" value={renameFrom} onChange={(e) => setRenameFrom(e.target.value)}>
+                      <option value="">Seleccionar</option>
+                      {presets.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                    <input className="rounded-md border border-gray-300 px-2 py-1 text-sm" placeholder="Nuevo nombre" value={renameTo} onChange={(e) => setRenameTo(e.target.value)} />
+                    <button className="px-3 py-1 rounded-md text-white" style={{ backgroundColor: 'var(--color-primary)' }} onClick={async () => {
+                      if (!renameFrom || !renameTo.trim()) return;
+                      await renamePreset(renameFrom, renameTo.trim());
+                      const p = await listPresets(); setPresets(p);
+                      setRenameFrom(''); setRenameTo('');
+                    }}>Renombrar</button>
+                  </div>
+                </div>
+                <div className="border rounded-md p-3">
+                  <div className="text-sm font-medium text-gray-800 mb-2">Duplicar preset</div>
+                  <div className="flex items-center gap-2">
+                    <select className="rounded-md border border-gray-300 px-2 py-1 text-sm" value={dupFrom} onChange={(e) => setDupFrom(e.target.value)}>
+                      <option value="">Seleccionar</option>
+                      {presets.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                    <input className="rounded-md border border-gray-300 px-2 py-1 text-sm" placeholder="Nombre de la copia" value={dupTo} onChange={(e) => setDupTo(e.target.value)} />
+                    <button className="px-3 py-1 rounded-md text-white" style={{ backgroundColor: 'var(--color-primary)' }} onClick={async () => {
+                      if (!dupFrom || !dupTo.trim()) return;
+                      await duplicatePreset(dupFrom, dupTo.trim());
+                      const p = await listPresets(); setPresets(p);
+                      setDupFrom(''); setDupTo('');
+                    }}>Duplicar</button>
+                  </div>
+                </div>
               </div>
 
               <div>

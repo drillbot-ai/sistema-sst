@@ -23,7 +23,7 @@ export default function MetricsPage() {
     <main className="container mx-auto p-6 max-w-lg">
       <h1 className="text-2xl font-bold mb-4">Indicadores Clave</h1>
       {isLoading && <p>Cargando indicadores…</p>}
-      {error && <p className="text-red-500">Error al cargar indicadores</p>}
+  {!!error && <p className="text-red-500">Error al cargar indicadores</p>}
       {data && (
         <ul className="space-y-2">
           <li className="bg-white shadow rounded p-4 flex justify-between">

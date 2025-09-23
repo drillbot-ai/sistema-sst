@@ -21,6 +21,8 @@ export type ThemeBase = {
   fontFamily: string;
   baseFontSize: string; // e.g., '14px'
   borderRadius: string; // e.g., '0.5rem'
+  lineHeight?: string; // e.g., '1.5'
+  letterSpacing?: string; // e.g., '0px' | '0.5px'
 };
 
 export type ThemeSettings = ThemeBase & ThemePalette;
@@ -33,6 +35,7 @@ export type ThemeBundle = {
   components?: ThemeComponents;
   fontProvider?: 'system' | 'google';
   googleFont?: string; // e.g., 'Inter' or 'Roboto'
+  layout?: ThemeLayout;
 };
 
 export type ThemeBundlePreset = ThemeBundle;
@@ -44,10 +47,25 @@ export type ThemeComponents = {
   focusRingColor?: string; // css color
   tableStriped?: boolean;
   tableStripeColor?: string;
+  // Extended controls
+  buttonRadius?: string; // e.g., '0.5rem'
+  buttonPaddingX?: string; // e.g., '0.75rem'
+  buttonPaddingY?: string; // e.g., '0.5rem'
+  inputRadius?: string;
+  inputPaddingX?: string;
+  inputPaddingY?: string;
+};
+
+export type ThemeLayout = {
+  contentMaxWidth?: string; // e.g., '1200px'
+  sidebarWidth?: string; // e.g., '16rem'
+  spacingUnit?: string; // e.g., '8px'
+  cardShadow?: 'none' | 'sm' | 'md' | 'lg';
 };
 
 const dataDir = path.join(__dirname, '..', '..', 'data');
 const themeFile = path.join(dataDir, 'theme.json');
+const backupsDir = path.join(dataDir, 'backups');
 
 export const defaultTheme: ThemeSettings = {
   primaryColor: '#2563eb',
@@ -66,6 +84,8 @@ export const defaultTheme: ThemeSettings = {
   fontFamily: 'Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji"',
   baseFontSize: '14px',
   borderRadius: '0.5rem',
+  lineHeight: '1.5',
+  letterSpacing: '0px',
 };
 
 export const defaultDark: ThemeSettings = {
@@ -85,6 +105,26 @@ export const defaultBundle: ThemeBundle = {
   dark: defaultDark,
   fontProvider: 'system',
   googleFont: 'Inter',
+  components: {
+    buttonStyle: 'solid',
+    buttonTextCase: 'normal',
+    inputBorderWidth: '1px',
+    focusRingColor: '#2563eb66',
+    tableStriped: true,
+    tableStripeColor: '#f5f7fb',
+    buttonRadius: '0.5rem',
+    buttonPaddingX: '0.75rem',
+    buttonPaddingY: '0.5rem',
+    inputRadius: '0.5rem',
+    inputPaddingX: '0.75rem',
+    inputPaddingY: '0.5rem',
+  },
+  layout: {
+    contentMaxWidth: '1200px',
+    sidebarWidth: '16rem',
+    spacingUnit: '8px',
+    cardShadow: 'sm',
+  },
   presets: {
     default: {
       mode: 'light',
@@ -92,6 +132,26 @@ export const defaultBundle: ThemeBundle = {
       dark: defaultDark,
       fontProvider: 'system',
       googleFont: 'Inter',
+      components: {
+        buttonStyle: 'solid',
+        buttonTextCase: 'normal',
+        inputBorderWidth: '1px',
+        focusRingColor: '#2563eb66',
+        tableStriped: true,
+        tableStripeColor: '#f5f7fb',
+        buttonRadius: '0.5rem',
+        buttonPaddingX: '0.75rem',
+        buttonPaddingY: '0.5rem',
+        inputRadius: '0.5rem',
+        inputPaddingX: '0.75rem',
+        inputPaddingY: '0.5rem',
+      },
+      layout: {
+        contentMaxWidth: '1200px',
+        sidebarWidth: '16rem',
+        spacingUnit: '8px',
+        cardShadow: 'sm',
+      },
     },
   },
 };
@@ -99,6 +159,13 @@ export const defaultBundle: ThemeBundle = {
 export function ensureDataDir() {
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
+  }
+}
+
+export function ensureBackupsDir() {
+  ensureDataDir();
+  if (!fs.existsSync(backupsDir)) {
+    fs.mkdirSync(backupsDir, { recursive: true });
   }
 }
 
@@ -186,4 +253,81 @@ export function importPreset(name: string, preset: ThemeBundlePreset): ThemeBund
   const merged = { ...current, presets };
   fs.writeFileSync(themeFile, JSON.stringify(merged, null, 2), 'utf-8');
   return merged;
+}
+
+export function renamePreset(oldName: string, newName: string): ThemeBundle | null {
+  const current = loadTheme();
+  const presets = { ...(current.presets || {}) };
+  const value = presets[oldName];
+  if (!value) return null;
+  delete presets[oldName];
+  presets[newName] = value;
+  const merged = { ...current, presets };
+  fs.writeFileSync(themeFile, JSON.stringify(merged, null, 2), 'utf-8');
+  return merged;
+}
+
+export function duplicatePreset(srcName: string, dstName: string): ThemeBundle | null {
+  const current = loadTheme();
+  const src = current.presets?.[srcName];
+  if (!src) return null;
+  const presets = { ...(current.presets || {}), [dstName]: { ...src } };
+  const merged = { ...current, presets };
+  fs.writeFileSync(themeFile, JSON.stringify(merged, null, 2), 'utf-8');
+  return merged;
+}
+
+/**
+ * Create a timestamped backup (snapshot) of the current theme bundle on disk.
+ * Returns the absolute path to the created backup file.
+ */
+export function createThemeBackup(): string {
+  ensureBackupsDir();
+  const ts = new Date()
+    .toISOString()
+    .replace(/[:]/g, '-')
+    .replace(/\..+$/, '') // drop milliseconds
+    .replace('T', '_');
+  const fileName = `theme_${ts}.json`;
+  const dest = path.join(backupsDir, fileName);
+  const bundle = loadTheme();
+  fs.writeFileSync(dest, JSON.stringify(bundle, null, 2), 'utf-8');
+  return dest;
+}
+
+/** List available theme backup files (filenames only) */
+export function listThemeBackups(): string[] {
+  try {
+    ensureBackupsDir();
+    return fs
+      .readdirSync(backupsDir)
+      .filter((f) => f.startsWith('theme_') && f.endsWith('.json'))
+      .sort()
+      .reverse();
+  } catch {
+    return [];
+  }
+}
+
+/** Load a specific theme backup file (by filename) */
+export function loadThemeBackup(fileName: string): ThemeBundle | null {
+  try {
+    ensureBackupsDir();
+    const full = path.join(backupsDir, fileName);
+    if (!full.startsWith(backupsDir)) return null; // basic path traversal guard
+    if (!fs.existsSync(full)) return null;
+    const raw = fs.readFileSync(full, 'utf-8');
+    return JSON.parse(raw) as ThemeBundle;
+  } catch {
+    return null;
+  }
+}
+
+/** Restore theme.json from a given backup filename */
+export function restoreThemeBackup(fileName: string): ThemeBundle | null {
+  const bundle = loadThemeBackup(fileName);
+  if (!bundle) return null;
+  ensureDataDir();
+  fs.writeFileSync(themeFile, JSON.stringify(bundle, null, 2), 'utf-8');
+  return bundle;
 }

@@ -19,11 +19,26 @@
   --font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji";
   --font-size-base: 14px;
   --radius-base: 0.5rem;
+  --line-height: 1.5;
+  --letter-spacing: 0px;
+  /* components */
+  --btn-radius: var(--radius-base);
+  --btn-px: 0.75rem;
+  --btn-py: 0.5rem;
+  --input-radius: var(--radius-base);
+  --input-px: 0.75rem;
+  --input-py: 0.5rem;
+  /* layout */
+  --content-max-w: 1200px;
+  --sidebar-w: 16rem;
+  --space: 8px;
 }
 
 html, body {
   font-family: var(--font-family);
   font-size: var(--font-size-base);
+  line-height: var(--line-height);
+  letter-spacing: var(--letter-spacing);
   color: var(--color-fg);
   background-color: var(--color-bg);
 }
@@ -45,7 +60,8 @@ select,
 textarea {
   border-width: var(--input-border-w);
   border-color: var(--color-border);
-  border-radius: var(--radius-base);
+  border-radius: var(--input-radius);
+  padding: var(--input-py) var(--input-px);
 }
 
 input:focus,
@@ -58,7 +74,8 @@ textarea:focus {
 
 .btn,
 button {
-  border-radius: var(--radius-base);
+  border-radius: var(--btn-radius);
+  padding: var(--btn-py) var(--btn-px);
 }
 
 .table tbody tr:nth-child(2n) td {

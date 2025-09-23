@@ -4,101 +4,64 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+type Submodule = { id: string; name: string; route?: string };
+type AppModule = { id: string; name: string; order?: number; enabled?: boolean; submodules?: Submodule[] };
+
 /**
  * Sidebar navigation for the SG‑SST system. Lists all top-level modules.
  * Active links are highlighted based on the current pathname.
  */
 export default function Sidebar() {
   const pathname = usePathname();
-  // Grouped navigation: Dashboard, Operaciones, Compras, RRHH, HSE, Alta Gerencia, Ajustes
-  const groups: Array<{ title: string; items: { href: string; label: string }[] }> = [
-    {
-      title: "Dashboard",
-      items: [
-        { href: "/metrics", label: "Dashboard" },
-      ],
-    },
-    {
-      title: "Operaciones",
-      items: [
-        { href: "/", label: "Vehículos" },
-        { href: "/inspecciones", label: "Inspecciones" },
-        { href: "/mantenimientos", label: "Mantenimientos" },
-        { href: "/accidentes", label: "Accidentes" },
-        { href: "/polizas", label: "Pólizas" },
-        { href: "/capacitaciones", label: "Capacitaciones" },
-        { href: "/contratistas", label: "Contratistas" },
-        { href: "/formularios", label: "Formularios" },
-      ],
-    },
-    {
-      title: "Compras",
-      items: [
-        { href: "/compras", label: "Resumen" },
-        { href: "/compras/proveedores", label: "Proveedores" },
-        { href: "/compras/ordenes", label: "Órdenes de compra" },
-        { href: "/compras/requisiciones", label: "Requisiciones" },
-        { href: "/compras/inventario", label: "Inventario" },
-        { href: "/compras/facturas", label: "Facturas" },
-      ],
-    },
-    {
-      title: "RRHH",
-      items: [
-        { href: "/rrhh", label: "Resumen" },
-        { href: "/rrhh/empleados", label: "Empleados" },
-        { href: "/rrhh/nomina", label: "Nómina" },
-        { href: "/rrhh/contratos", label: "Contratos" },
-        { href: "/rrhh/ausentismo", label: "Ausentismo" },
-        { href: "/rrhh/evaluaciones", label: "Evaluaciones" },
-      ],
-    },
-    {
-      title: "HSE",
-      items: [
-        { href: "/hse", label: "Resumen" },
-        { href: "/hse/matriz-riesgos", label: "Matriz de riesgos" },
-        { href: "/hse/indicadores", label: "Indicadores" },
-        { href: "/hse/planes-accion", label: "Planes de acción" },
-        { href: "/hse/documentos", label: "Documentos" },
-      ],
-    },
-    {
-      title: "Alta Gerencia",
-      items: [
-        { href: "/gerencia", label: "Tablero ejecutivo" },
-        { href: "/gerencia/kpi", label: "KPI estratégicos" },
-        { href: "/gerencia/informes", label: "Informes" },
-        { href: "/gerencia/auditorias", label: "Auditorías" },
-        { href: "/gerencia/cumplimiento", label: "Cumplimiento" },
-      ],
-    },
-    {
-      title: "Ajustes",
-      items: [
-        { href: "/ajustes", label: "Configuración de la empresa" },
-        { href: "/ajustes/estilos", label: "Estilos" },
-        { href: "/ajustes/modulos", label: "Módulos" },
-        { href: "/ajustes/numeracion", label: "Numeración" },
-        { href: "/ajustes/seguridad", label: "Seguridad" },
-        { href: "/ajustes/localizacion", label: "Localización" },
-        { href: "/ajustes/backup", label: "Backup y reset" },
-        { href: "/ajustes/integraciones", label: "Integraciones" },
-        { href: "/ajustes/notificaciones", label: "Notificaciones" },
-        { href: "/ajustes/auditoria", label: "Auditoría" },
-        { href: "/ajustes/plantillas", label: "Plantillas" },
-        { href: "/ajustes/automatizaciones", label: "Automatizaciones" },
-        { href: "/ajustes/avanzado", label: "Avanzado" },
-      ],
-    },
-  ];
+  const [modules, setModules] = useState<AppModule[]>([]);
+  const loadModules = async () => {
+    try {
+      const res = await fetch('http://localhost:3002/api/settings/modules');
+      const data = await res.json();
+      const mods: AppModule[] = (data.modules || [])
+        .filter((m: AppModule) => m.enabled !== false)
+        .sort((a: AppModule, b: AppModule) => (a.order ?? 0) - (b.order ?? 0));
+      setModules(mods);
+    } catch (e) {}
+  };
+  useEffect(() => { loadModules(); }, []);
+  useEffect(() => {
+    const onUpdated = () => loadModules();
+    const onVisible = () => { if (document.visibilityState === 'visible') loadModules(); };
+    window.addEventListener('modules-updated', onUpdated);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('modules-updated', onUpdated);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+  // Build groups: one group per enabled module (order preserved from backend). If a module has no submodules, show a disabled-looking placeholder.
+  const groups = useMemo(() => {
+    return modules.map(m => {
+      const seen = new Set<string>();
+      const items = (m.submodules || [])
+        .filter(s => !!s.route)
+        .filter(s => {
+          const key = String(s.route);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .map(s => ({ href: s.route as string, label: s.name }));
+      // If there are no submodules with routes, add a non-clickable placeholder
+      if (items.length === 0) {
+        return { title: m.name, items: [{ href: '#', label: 'Sin submódulos' }] };
+      }
+      return { title: m.name, items };
+    });
+  }, [modules]);
   // Determine which group is active based on the current pathname
   const isItemActive = (href: string) => pathname === href || (href !== "/" && pathname.startsWith(href));
   const activeGroupTitle = useMemo(() => {
     return (
       groups.find((g) => g.items.some((it) => isItemActive(it.href)))?.title || groups[0]?.title || ""
     );
-  }, [pathname]);
+  }, [pathname, groups]);
 
   // Single-open accordion: only one group expanded at a time
   const [openGroup, setOpenGroup] = useState<string>(activeGroupTitle);
@@ -128,6 +91,14 @@ export default function Sidebar() {
                 <div className="mt-1 space-y-1">
                   {group.items.map(({ href, label }) => {
                     const active = isItemActive(href);
+                    // Placeholder entries are not clickable
+                    if (href === '#') {
+                      return (
+                        <div key={`${group.title}-empty`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-gray-400">
+                          {label}
+                        </div>
+                      );
+                    }
                     return (
                       <Link
                         key={href}

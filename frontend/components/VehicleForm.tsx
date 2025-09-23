@@ -137,8 +137,8 @@ export default function VehicleForm({ onSubmit, onCancel, isLoading = false }: V
   });
 
   const tabs = [
-    { id: "vehicle", label: "Información del Vehículo", icon: "🚗" },
-    { id: "owner", label: "Información del Propietario", icon: "�" },
+    { id: "identification", label: "Información del Vehículo", icon: "🚗" },
+    { id: "owner", label: "Información del Propietario", icon: "🏢" },
     { id: "documents", label: "Documentos y Pólizas", icon: "📄" },
     { id: "maintenance", label: "Historial de Mantenimiento", icon: "🔧" },
     { id: "updates", label: "Datos de Actualización", icon: "📝" }
@@ -194,7 +194,7 @@ export default function VehicleForm({ onSubmit, onCancel, isLoading = false }: V
                   Serial/NIV
                 </label>
                 <input
-                  {...register("serial")}
+                  {...register("serialNumber")}
                   className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="1234567890"
                 />
@@ -227,19 +227,19 @@ export default function VehicleForm({ onSubmit, onCancel, isLoading = false }: V
                   Año
                 </label>
                 <input
-                  {...register("year", { 
+                  {...register("manufacturingYear", { 
                     valueAsNumber: true,
                     min: { value: 1900, message: "Año inválido" },
                     max: { value: new Date().getFullYear() + 1, message: "Año inválido" }
                   })}
                   type="number"
                   className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    errors.year ? "border-red-300" : "border-gray-300"
+                    errors.manufacturingYear ? "border-red-300" : "border-gray-300"
                   }`}
                   placeholder="2023"
                 />
-                {errors.year && (
-                  <p className="mt-1 text-sm text-red-600">{errors.year.message}</p>
+                {errors.manufacturingYear && (
+                  <p className="mt-1 text-sm text-red-600">{errors.manufacturingYear.message}</p>
                 )}
               </div>
             </div>

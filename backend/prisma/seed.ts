@@ -15,10 +15,23 @@ async function upsertForm(def: any) {
     update: { name: def.name, description: def.description ?? undefined },
     create: { code: def.code, name: def.name, description: def.description ?? undefined },
   });
-  // Insert a new version; mark existing versions as inactive
+  // Determine target version number
+  const versions = await prisma.formVersion.findMany({ where: { formId: form.id }, select: { version: true } });
+  const desired = typeof def.version === 'number' ? def.version : undefined;
+  const maxVersion = versions.length ? Math.max(...versions.map(v => v.version)) : 0;
+  const targetVersion = desired ?? (maxVersion + 1 || 1);
+
+  // Deactivate all existing versions first
   await prisma.formVersion.updateMany({ where: { formId: form.id }, data: { active: false } });
-  await prisma.formVersion.create({ data: { formId: form.id, version: def.version ?? 1, schema: def, active: true } });
-  console.log(`Seeded ${def.code}`);
+
+  // If a version with the same number exists, update it; otherwise create
+  const existing = await prisma.formVersion.findUnique({ where: { formId_version: { formId: form.id, version: targetVersion } } });
+  if (existing) {
+    await prisma.formVersion.update({ where: { id: existing.id }, data: { schema: def, active: true } });
+  } else {
+    await prisma.formVersion.create({ data: { formId: form.id, version: targetVersion, schema: def, active: true } });
+  }
+  console.log(`Seeded ${def.code} v${targetVersion}`);
 }
 
 async function main() {

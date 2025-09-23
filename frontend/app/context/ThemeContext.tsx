@@ -23,6 +23,8 @@ type ThemeSettings = ThemePalette & {
   fontFamily: string;
   baseFontSize: string;
   borderRadius: string;
+  lineHeight?: string;
+  letterSpacing?: string;
 };
 
 type ThemeBundle = {
@@ -33,6 +35,7 @@ type ThemeBundle = {
   components?: ThemeComponents;
   fontProvider?: 'system' | 'google';
   googleFont?: string;
+  layout?: ThemeLayout;
 };
 
 // Minimal component theming for later use
@@ -43,6 +46,19 @@ export type ThemeComponents = {
   focusRingColor?: string;
   tableStriped?: boolean;
   tableStripeColor?: string;
+  buttonRadius?: string;
+  buttonPaddingX?: string;
+  buttonPaddingY?: string;
+  inputRadius?: string;
+  inputPaddingX?: string;
+  inputPaddingY?: string;
+}
+
+export type ThemeLayout = {
+  contentMaxWidth?: string;
+  sidebarWidth?: string;
+  spacingUnit?: string;
+  cardShadow?: 'none' | 'sm' | 'md' | 'lg';
 }
 
 type ThemeContextType = {
@@ -59,6 +75,10 @@ type ThemeContextType = {
   deletePreset: (name: string) => Promise<void>;
   resetTheme: () => Promise<void>;
   setFontProvider: (provider: 'system' | 'google', googleFont?: string) => Promise<void>;
+  setComponents: (c: Partial<ThemeComponents>) => Promise<void>;
+  setLayout: (l: Partial<ThemeLayout>) => Promise<void>;
+  renamePreset: (oldName: string, newName: string) => Promise<void>;
+  duplicatePreset: (src: string, copyName: string) => Promise<void>;
 };
 
 const defaultTheme: ThemeSettings = {
@@ -93,6 +113,10 @@ const ThemeContext = createContext<ThemeContextType>({
   deletePreset: async () => {},
   resetTheme: async () => {},
   setFontProvider: async () => {},
+  setComponents: async () => {},
+  setLayout: async () => {},
+  renamePreset: async () => {},
+  duplicatePreset: async () => {},
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -120,10 +144,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     root.style.setProperty('--font-family', t.fontFamily);
     root.style.setProperty('--font-size-base', t.baseFontSize);
     root.style.setProperty('--radius-base', t.borderRadius);
+    if (t.lineHeight) root.style.setProperty('--line-height', t.lineHeight);
+    if (t.letterSpacing) root.style.setProperty('--letter-spacing', t.letterSpacing);
     // component-level vars if provided
     if (b?.components?.focusRingColor) root.style.setProperty('--focus-ring', b.components.focusRingColor);
     if (b?.components?.inputBorderWidth) root.style.setProperty('--input-border-w', b.components.inputBorderWidth);
     if (b?.components?.tableStripeColor) root.style.setProperty('--table-stripe', b.components.tableStripeColor);
+    if (b?.components?.buttonRadius) root.style.setProperty('--btn-radius', b.components.buttonRadius);
+    if (b?.components?.buttonPaddingX) root.style.setProperty('--btn-px', b.components.buttonPaddingX);
+    if (b?.components?.buttonPaddingY) root.style.setProperty('--btn-py', b.components.buttonPaddingY);
+    if (b?.components?.inputRadius) root.style.setProperty('--input-radius', b.components.inputRadius);
+    if (b?.components?.inputPaddingX) root.style.setProperty('--input-px', b.components.inputPaddingX);
+    if (b?.components?.inputPaddingY) root.style.setProperty('--input-py', b.components.inputPaddingY);
+    // layout vars
+    if (b?.layout?.contentMaxWidth) root.style.setProperty('--content-max-w', b.layout.contentMaxWidth);
+    if (b?.layout?.sidebarWidth) root.style.setProperty('--sidebar-w', b.layout.sidebarWidth);
+    if (b?.layout?.spacingUnit) root.style.setProperty('--space', b.layout.spacingUnit);
   };
 
   useEffect(() => {
@@ -255,6 +291,44 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     await axios.put('http://localhost:3002/api/settings/theme', updated);
   };
 
+  const setComponents = async (c: Partial<ThemeComponents>) => {
+    const current = bundle ?? ({ mode, light: theme, dark: theme } as ThemeBundle);
+    const updated: ThemeBundle = { ...current, components: { ...(current.components || {}), ...c } };
+    setBundle(updated);
+    const pal = updated[mode];
+    setThemeState(pal);
+    applyTheme(pal, updated);
+    await axios.put('http://localhost:3002/api/settings/theme', updated);
+  };
+
+  const setLayout = async (l: Partial<ThemeLayout>) => {
+    const current = bundle ?? ({ mode, light: theme, dark: theme } as ThemeBundle);
+    const updated: ThemeBundle = { ...current, layout: { ...(current.layout || {}), ...l } };
+    setBundle(updated);
+    const pal = updated[mode];
+    setThemeState(pal);
+    applyTheme(pal, updated);
+    await axios.put('http://localhost:3002/api/settings/theme', updated);
+  };
+
+  const renamePreset = async (oldName: string, newName: string) => {
+    const res = await axios.post(`http://localhost:3002/api/settings/theme/presets/${encodeURIComponent(oldName)}/rename`, { newName });
+    const b: ThemeBundle = res.data;
+    setBundle(b);
+    const pal = (b.mode === 'dark' ? b.dark : b.light) || theme;
+    setThemeState(pal);
+    applyTheme(pal, b);
+  };
+
+  const duplicatePreset = async (src: string, copyName: string) => {
+    const res = await axios.post(`http://localhost:3002/api/settings/theme/presets/${encodeURIComponent(src)}/duplicate`, { copyName });
+    const b: ThemeBundle = res.data;
+    setBundle(b);
+    const pal = (b.mode === 'dark' ? b.dark : b.light) || theme;
+    setThemeState(pal);
+    applyTheme(pal, b);
+  };
+
   // expose in context by extending value
   const value = useMemo(() => ({
     theme,
@@ -269,6 +343,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     deletePreset,
     resetTheme,
     setFontProvider,
+    setComponents,
+    setLayout,
+    renamePreset,
+    duplicatePreset,
   }), [theme, mode, isLoading, bundle]);
 
   return (

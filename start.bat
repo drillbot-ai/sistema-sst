@@ -1,70 +1,85 @@
 @echo off
 REM Script de arranque para el sistema SST en Windows
-REM Ejecuta la base de datos, el backend y el frontend en ventanas separadas.
+REM Ejecuta DB (Docker), backend y frontend en ventanas separadas y maneja limpieza previa.
+chcp 65001 > NUL
 
-echo Preparando el entorno del Sistema SG‑SST...
+setlocal ENABLEDELAYEDEXPANSION
+title Start SG-SST
+echo Preparando el entorno del Sistema SG-SST...
 
-REM 0. Liberar puertos comunes (3002 backend, 3000/3001 frontend)
-echo Liberando puertos 3002, 3001 y 3000 si están en uso...
+REM 0. Terminar procesos Node que puedan bloquear puertos/archivos
+echo Cerrando procesos Node residuales...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-Process -Name node -ErrorAction SilentlyContinue | Stop-Process -Force"
+
+REM 1. Liberar puertos comunes (3002 backend, 3000/3001 frontend)
+echo Liberando puertos 3002, 3001 y 3000 si estan en uso...
 for %%P in (3002 3001 3000) do (
   powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $p=(Get-NetTCPConnection -State Listen -LocalPort %%P -ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess; if ($p) { Write-Host 'Matando PID' $p 'en puerto' %%P; Stop-Process -Id $p -Force -ErrorAction SilentlyContinue } } catch { }"
 )
 
-REM 1. Verificar archivo de entorno. Si no existe .env en backend, copiar ejemplo
+REM 2. Verificar archivo .env del backend
 IF NOT EXIST backend\.env (
-  echo Copiando archivo .env de ejemplo...
-  copy backend\.env.example backend\.env > NUL
+  IF EXIST backend\.env.example (
+    echo Copiando archivo .env de ejemplo...
+    copy /Y backend\.env.example backend\.env > NUL
+  ) ELSE (
+    echo Advertencia: backend\.env no existe y no hay .env.example. Continuando...
+  )
 )
 
-REM 2. Reiniciar la base de datos de Docker.
-REM Intenta detener y eliminar cualquier contenedor previo asociado a este docker-compose
+REM 3. Base de datos con Docker
+echo Reiniciando servicios de Docker...
 call docker-compose down --remove-orphans > NUL 2>&1
-REM Levantar nuevamente la base de datos
 docker-compose up -d
 IF ERRORLEVEL 1 (
-  echo Error al iniciar Docker. ¿Tiene Docker instalado y en ejecución?
+  echo Error al iniciar Docker. Asegurese de tener Docker Desktop ejecutandose.
   GOTO end
 )
+echo Esperando a que la base de datos este lista...
+REM breve espera para permitir readiness del contenedor DB
+timeout /t 3 /nobreak > NUL
 
-REM 3. Instalar dependencias y generar prisma en el backend
+REM 4. Backend: instalar deps, Prisma y seed
 pushd backend
 IF NOT EXIST node_modules (
   echo Instalando dependencias del backend...
   call npm install
 )
-
 IF EXIST prisma\schema.prisma (
   echo Generando cliente Prisma...
   call npx prisma generate
   echo Aplicando migraciones de Prisma...
   call npx prisma migrate deploy
-  REM Ejecutar el seed para cargar formularios dinámicos en la base de datos
-  echo Cargando datos iniciales...
+  echo Cargando datos iniciales - seed ...
   call npm run db:seed
 )
 popd
 
-REM 4. Instalar dependencias del frontend
+REM 5. Frontend: instalar deps y limpiar cache .next (evitar EPERM en Windows)
 pushd frontend
 IF NOT EXIST node_modules (
   echo Instalando dependencias del frontend...
   call npm install
 )
+echo Limpiando cache frontend (rimraf .next)...
+call npm run clean 2> NUL
 popd
 
-REM 5. Lanzar servidores en nuevas ventanas de consola
+REM 6. Lanzar servidores en nuevas ventanas
 echo Iniciando servicios...
-REM Lanzar backend con PORT=3002 en su propia ventana (aislar variable de entorno)
-start "SST Backend" cmd /k "cd backend && set PORT=3002 && npm run build && npm start"
-REM Lanzar frontend en su propia ventana, por defecto Next usa 3000; si fuese necesario, fijar PORT=3000
-start "SST Frontend" cmd /k "cd frontend && set PORT=3000 && npm run dev"
+REM Backend: compilar y arrancar en puerto 3002
+start "SST Backend" cmd /k "title SST Backend && cd backend && set PORT=3002 && npm run build && npm start"
+REM Frontend: Next dev en puerto 3000
+start "SST Frontend" cmd /k "title SST Frontend && cd frontend && set PORT=3000 && set NEXT_TELEMETRY_DISABLED=1 && set NODE_OPTIONS= && npm run dev:clean"
 
 echo.
-echo Sistema iniciado correctamente.
-echo El backend se ejecuta en http://localhost:3002 y el frontend en http://localhost:3000
-echo Para detener los servicios presione Ctrl+C en cada ventana o ejecute docker-compose down.
+echo Sistema iniciado.
+echo - Backend:  http://localhost:3002
+echo - Frontend: http://localhost:3000 (si 3000 ocupado, Next usara el siguiente disponible)
+echo Para detener, cierre las ventanas del Backend/Frontend y ejecute: docker-compose down
 
 :end
 echo.
 echo Presione cualquier tecla para cerrar esta ventana...
 pause > nul
+endlocal

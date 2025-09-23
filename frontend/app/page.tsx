@@ -21,6 +21,7 @@ export default function VehiclesPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [openDownloadMenuId, setOpenDownloadMenuId] = useState<number | null>(null);
   const limit = 10;
   const queryClient = useQueryClient();
   const {
@@ -45,6 +46,15 @@ export default function VehiclesPage() {
     },
   });
 
+  // Metrics to avoid static KPI values
+  const { data: metrics } = useQuery<{ vehicles: number } | undefined>({
+    queryKey: ["metrics"],
+    queryFn: async () => {
+      const res = await axios.get(`http://localhost:3002/api/metrics`);
+      return res.data;
+    },
+  });
+
   const createVehicleMutation = useMutation({
     mutationFn: async (vehicleData: any) => {
       const response = await axios.post(`http://localhost:3002/api/vehicles`, vehicleData);
@@ -54,10 +64,43 @@ export default function VehiclesPage() {
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       setIsModalOpen(false);
     },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Error al guardar el vehículo';
+      alert(`No se pudo guardar el vehículo: ${msg}`);
+      console.error('Create vehicle error:', err?.response?.data || err);
+    }
   });
 
   const handleCreateVehicle = async (data: any) => {
-    await createVehicleMutation.mutateAsync(data);
+    const payload = {
+      plate: (data.plate ?? '').trim(),
+      brand: data.brand || undefined,
+      model: data.model || undefined,
+      manufacturingYear: data.manufacturingYear ?? data.year ?? undefined,
+      serialNumber: data.serialNumber || undefined,
+      vehiclePhoto: data.vehiclePhoto || undefined,
+      documents: Array.isArray(data.documents)
+        ? data.documents.map((d: any) => ({
+            type: d.type,
+            number: d.number,
+            issuer: d.issuer,
+            issueDate: d.issueDate,
+            expireDate: d.expireDate,
+            fileData: d.fileData,
+            fileName: d.fileName,
+          }))
+        : [],
+      maintenanceHistory: Array.isArray(data.maintenanceHistory)
+        ? data.maintenanceHistory.map((m: any) => ({
+            date: m.date,
+            type: m.type,
+            description: m.description,
+            cost: m.cost,
+            photos: Array.isArray(m.photos) ? m.photos : [],
+          }))
+        : [],
+    };
+    await createVehicleMutation.mutateAsync(payload);
   };
 
   const handleExportVehicle = async (vehicleId: number, format: 'html' | 'excel' | 'pdf') => {
@@ -105,6 +148,26 @@ export default function VehiclesPage() {
       alert('Error al generar el archivo de exportación');
     }
   };
+  
+  const deleteVehicleMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await axios.delete(`http://localhost:3002/api/vehicles/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+    },
+  });
+
+  const handleDeleteVehicle = async (id: number) => {
+    if (!confirm("¿Estás seguro de eliminar este vehículo? Esta acción no se puede deshacer.")) return;
+    try {
+      await deleteVehicleMutation.mutateAsync(id);
+    } catch (e) {
+      alert("No se pudo eliminar el vehículo. Verifique que no tenga inspecciones, accidentes o pólizas asociadas.");
+    }
+  };
+
+  const vehiclesCount = metrics?.vehicles ?? undefined;
   const items = vehicles ?? [];
   return (
     <ListShell
@@ -128,10 +191,7 @@ export default function VehiclesPage() {
       }
       kpis={
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <KPICard title="Vehículos activos" value={`${items.length}`} />
-          <KPICard title="Vencen este mes" value="3" delta="+1 respecto al mes pasado" />
-          <KPICard title="En mantenimiento" value="1" />
-          <KPICard title="Disponibilidad" value="96.5%" />
+          <KPICard title="Vehículos" value={vehiclesCount !== undefined ? String(vehiclesCount) : "-"} />
         </section>
       }
     >
@@ -195,27 +255,69 @@ export default function VehiclesPage() {
                   <td className="px-3 py-2">{v.model ?? "-"}</td>
                   <td className="px-3 py-2">{v.year ?? "-"}</td>
                   <td className="px-3 py-2">
-                    <div className="flex gap-1">
+                    <div className="relative flex items-center gap-2">
+                      {/* Edit icon */}
                       <button
-                        onClick={() => handleExportVehicle(v.id, 'html')}
-                        className="text-xs bg-green-100 text-green-700 hover:bg-green-200 px-2 py-1 rounded border"
-                        title="Exportar a HTML"
+                        type="button"
+                        className="p-1 rounded hover:bg-gray-100"
+                        title="Editar"
+                        onClick={() => setIsModalOpen(true)}
+                        aria-label="Editar vehículo"
                       >
-                        HTML
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5 text-gray-700">
+                          <path d="M15.586 3.586a2 2 0 0 1 2.828 2.828l-9.193 9.193a4 4 0 0 1-1.414.94l-3.042 1.141a.5.5 0 0 1-.65-.65l1.14-3.042a4 4 0 0 1 .94-1.414l9.193-9.193Z" />
+                          <path d="M12.379 6.793 13.793 8.207 5.5 16.5H4.086v-1.414l8.293-8.293Z" />
+                        </svg>
                       </button>
+                      {/* Download icon with format menu */}
+                      <div className="relative">
+                        <button
+                          type="button"
+                          className="p-1 rounded hover:bg-gray-100"
+                          title="Descargar"
+                          onClick={() => setOpenDownloadMenuId((prev) => (prev === v.id ? null : v.id))}
+                          aria-haspopup="menu"
+                          aria-expanded={openDownloadMenuId === v.id}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5 text-gray-700">
+                            <path d="M12 3a1 1 0 0 1 1 1v8.586l2.293-2.293a1 1 0 1 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 1 1 1.414-1.414L11 12.586V4a1 1 0 0 1 1-1Z" />
+                            <path d="M4 18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2a1 1 0 1 0-2 0v2H6v-2a1 1 0 1 0-2 0v2Z" />
+                          </svg>
+                        </button>
+                        {openDownloadMenuId === v.id && (
+                          <div className="absolute z-10 mt-1 w-36 rounded-md border border-gray-200 bg-white shadow-lg">
+                            <button
+                              className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                              onClick={() => { handleExportVehicle(v.id, 'html'); setOpenDownloadMenuId(null); }}
+                            >
+                              HTML
+                            </button>
+                            <button
+                              className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                              onClick={() => { handleExportVehicle(v.id, 'pdf'); setOpenDownloadMenuId(null); }}
+                            >
+                              PDF
+                            </button>
+                            <button
+                              className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                              onClick={() => { handleExportVehicle(v.id, 'excel'); setOpenDownloadMenuId(null); }}
+                            >
+                              Excel
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      {/* Delete icon */}
                       <button
-                        onClick={() => handleExportVehicle(v.id, 'excel')}
-                        className="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 px-2 py-1 rounded border"
-                        title="Exportar a Excel"
+                        type="button"
+                        className="p-1 rounded hover:bg-gray-100"
+                        title="Eliminar"
+                        onClick={() => handleDeleteVehicle(v.id)}
+                        aria-label="Eliminar vehículo"
                       >
-                        Excel
-                      </button>
-                      <button
-                        onClick={() => handleExportVehicle(v.id, 'pdf')}
-                        className="text-xs bg-red-100 text-red-700 hover:bg-red-200 px-2 py-1 rounded border"
-                        title="Exportar a PDF"
-                      >
-                        PDF
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5 text-red-600">
+                          <path d="M9 3a1 1 0 0 0-1 1v1H5.5a1 1 0 1 0 0 2H6v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7h.5a1 1 0 1 0 0-2H16V4a1 1 0 0 0-1-1H9Zm2 3h2V5h-2v1ZM8 7h10v12H8V7Zm3 3a1 1 0 1 1 2 0v7a1 1 0 1 1-2 0v-7Zm-3 0a1 1 0 1 1 2 0v7a1 1 0 1 1-2 0v-7Zm8 0a1 1 0 1 1 2 0v7a1 1 0 1 1-2 0v-7Z" />
+                        </svg>
                       </button>
                     </div>
                   </td>

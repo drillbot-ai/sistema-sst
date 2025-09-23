@@ -19,7 +19,9 @@ import { setupSwagger } from './swagger';
 import path from 'path';
 import fs from 'fs';
 import { ensureUploadsDir, uploadsDir, saveDataUrl, localPathFromUrl } from './storage';
-import { loadTheme, saveTheme, listPresets, savePreset, applyPreset as applyThemePreset, deletePreset as deleteThemePreset, resetTheme, exportPreset, importPreset } from './settings';
+import { loadTheme, saveTheme, listPresets, savePreset, applyPreset as applyThemePreset, deletePreset as deleteThemePreset, resetTheme, exportPreset, importPreset, createThemeBackup, listThemeBackups, restoreThemeBackup, renamePreset as renameThemePreset, duplicatePreset as duplicateThemePreset } from './settings';
+import { loadAppSettings, saveAppSettings, saveAppSettingsSection } from './appSettings';
+import { loadModules, saveModules, upsertModule, deleteModule, upsertSubmodule, deleteSubmodule, createModulesBackup, listModulesBackups, restoreModulesBackup } from './modules';
 // Import the forms router for dynamic form operations
 import formsRouter from './forms';
 
@@ -31,6 +33,16 @@ app.use(cors());
 // Accept larger payloads to allow base64 images/files
 app.use(bodyParser.json({ limit: '25mb' }));
 app.use(bodyParser.urlencoded({ limit: '25mb', extended: true }));
+// Graceful handling of malformed JSON bodies
+app.use((err: any, _req: Request, res: Response, next: any) => {
+  if (err && err.type === 'entity.parse.failed') {
+    return res.status(400).json({ message: 'Invalid JSON payload', error: err.message });
+  }
+  if (err instanceof SyntaxError && 'body' in (err as any)) {
+    return res.status(400).json({ message: 'Invalid JSON payload', error: (err as any).message });
+  }
+  return next(err);
+});
 // Static serving for local uploads
 ensureUploadsDir();
 app.use('/uploads', express.static(uploadsDir));
@@ -45,6 +57,306 @@ app.use('/api', formsRouter);
 app.get('/', (_req: Request, res: Response) => {
   res.json({ message: 'SST API is running' });
 });
+/* Settings: Modules (builder) */
+// Get all modules config
+app.get('/api/settings/modules', (_req: Request, res: Response) => {
+  try {
+    res.json(loadModules());
+  } catch (err) {
+    res.status(500).json({ message: 'Error loading modules config', error: err });
+  }
+});
+
+/* Settings: App (general) */
+app.get('/api/settings/app', (_req: Request, res: Response) => {
+  try {
+    res.json(loadAppSettings());
+  } catch (err) {
+    res.status(500).json({ message: 'Error loading app settings', error: err });
+  }
+});
+app.put('/api/settings/app', (req: Request, res: Response) => {
+  try {
+    const cfg = saveAppSettings(req.body || {});
+    res.json(cfg);
+  } catch (err) {
+    res.status(500).json({ message: 'Error saving app settings', error: err });
+  }
+});
+app.put('/api/settings/app/:section', (req: Request, res: Response) => {
+  try {
+    const section = req.params.section as any;
+    const cfg = saveAppSettingsSection(section, req.body || {});
+    res.json(cfg);
+  } catch (err) {
+    res.status(500).json({ message: 'Error saving app settings section', error: err });
+  }
+});
+
+// Replace entire modules config
+app.put('/api/settings/modules', (req: Request, res: Response) => {
+  try {
+    const cfg = saveModules(req.body);
+    res.json(cfg);
+  } catch (err) {
+    res.status(500).json({ message: 'Error saving modules config', error: err });
+  }
+});
+
+// Create/update a single module
+app.put('/api/settings/modules/:moduleId', (req: Request, res: Response) => {
+  try {
+    const moduleId = req.params.moduleId;
+    const mod = { ...req.body, id: moduleId };
+    const cfg = upsertModule(mod);
+    res.json(cfg);
+  } catch (err) {
+    res.status(400).json({ message: 'Error upserting module', error: err });
+  }
+});
+
+// Delete a module
+app.delete('/api/settings/modules/:moduleId', (req: Request, res: Response) => {
+  try {
+    const cfg = deleteModule(req.params.moduleId);
+    res.json(cfg);
+  } catch (err) {
+    res.status(400).json({ message: 'Error deleting module', error: err });
+  }
+});
+
+// Upsert a submodule
+app.put('/api/settings/modules/:moduleId/submodules/:subId', (req: Request, res: Response) => {
+  try {
+    const { moduleId, subId } = req.params;
+    const sub = { ...req.body, id: subId };
+    const cfg = upsertSubmodule(moduleId, sub);
+    res.json(cfg);
+  } catch (err) {
+    res.status(400).json({ message: 'Error upserting submodule', error: err });
+  }
+});
+
+// Delete a submodule
+app.delete('/api/settings/modules/:moduleId/submodules/:subId', (req: Request, res: Response) => {
+  try {
+    const { moduleId, subId } = req.params;
+    const cfg = deleteSubmodule(moduleId, subId);
+    res.json(cfg);
+  } catch (err) {
+    res.status(400).json({ message: 'Error deleting submodule', error: err });
+  }
+});
+
+// DataSource fetch proxy: fetch rows for a configured table datasource
+app.post('/api/modules/datasource', authenticate(), async (req: Request, res: Response) => {
+  try {
+    const { moduleId, submoduleId, tableId, params } = req.body || {};
+    const cfg = loadModules();
+    const mod = cfg.modules.find((m: any) => m.id === moduleId);
+    const sub = mod?.submodules?.find((s: any) => s.id === submoduleId);
+    const table = sub?.tables?.find((t: any) => t.id === tableId);
+    if (!mod || !sub || !table?.dataSource) return res.status(404).json({ message: 'Data source not found' });
+
+    const ds = table.dataSource as any;
+    const method = (ds.method || 'GET').toUpperCase();
+    const url = new URL(ds.url, `http://localhost:${process.env.PORT || 3002}`);
+    if (method === 'GET' && params && typeof params === 'object') {
+      for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
+    }
+    const headers: any = { 'Content-Type': 'application/json', ...(ds.headers || {}) };
+    const resp = await fetch(url.toString(), {
+      method,
+      headers,
+      body: method === 'GET' ? undefined : JSON.stringify(ds.body ?? params ?? {}),
+    });
+    const contentType = resp.headers.get('content-type') || '';
+    const raw = contentType.includes('application/json') ? await resp.json() : await resp.text();
+    let rows: any = raw;
+    if (ds.path) {
+      try {
+        const parts = String(ds.path).split('.');
+        let cur: any = raw;
+        for (const p of parts) cur = cur?.[p];
+        rows = cur ?? [];
+      } catch {
+        rows = [];
+      }
+    }
+    if (!Array.isArray(rows)) rows = [];
+    res.json({ rows });
+  } catch (err: any) {
+    res.status(500).json({ message: 'Error fetching data source', error: err?.message || String(err) });
+  }
+});
+
+// Metric fetch proxy: fetch a single value for a configured metric datasource
+app.post('/api/modules/fetch', authenticate(), async (req: Request, res: Response) => {
+  try {
+    const { moduleId, submoduleId, metricId, params } = req.body || {};
+    const cfg = loadModules();
+    const mod = cfg.modules.find((m: any) => m.id === moduleId);
+    const sub = mod?.submodules?.find((s: any) => s.id === submoduleId);
+    const metric = sub?.metrics?.find((m: any) => m.id === metricId);
+    const ds = (metric as any)?.dataSource;
+    if (!mod || !sub || !metric || !ds?.url) return res.status(404).json({ message: 'Metric data source not found' });
+
+    const method = (ds.method || 'GET').toUpperCase();
+    // Only allow internal API
+    const allowed = String(ds.url).startsWith('/api/') && !String(ds.url).startsWith('/api/settings');
+    if (!allowed) return res.status(400).json({ message: 'API target not allowed' });
+    const url = new URL(ds.url, `http://localhost:${process.env.PORT || 3002}`);
+    if (method === 'GET' && params && typeof params === 'object') {
+      for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
+    }
+    const headers: any = { 'Content-Type': 'application/json', ...(ds.headers || {}) };
+    const resp = await fetch(url.toString(), {
+      method,
+      headers,
+      body: method === 'GET' ? undefined : JSON.stringify(ds.body ?? params ?? {}),
+    });
+    const contentType = resp.headers.get('content-type') || '';
+    const raw = contentType.includes('application/json') ? await resp.json() : await resp.text();
+    let data: any = raw;
+    if (ds.path) {
+      try {
+        const parts = String(ds.path).split('.');
+        let cur: any = raw;
+        for (const p of parts) cur = cur?.[p];
+        data = cur;
+      } catch {}
+    }
+    // Try to coerce a numeric value
+    let value: any = data;
+    if (Array.isArray(data)) value = data.length;
+    if (typeof value === 'string') {
+      const n = Number(value);
+      value = isNaN(n) ? value : n;
+    }
+    return res.json({ value, data });
+  } catch (err: any) {
+    res.status(500).json({ message: 'Error fetching metric', error: err?.message || String(err) });
+  }
+});
+
+// Modules backups similar to theme
+app.post('/api/settings/backup/modules/snapshot', (_req: Request, res: Response) => {
+  try {
+    const file = createModulesBackup();
+    res.json({ file: path.basename(file) });
+  } catch (err) {
+    res.status(500).json({ message: 'Error creating modules backup', error: err });
+  }
+});
+
+app.get('/api/settings/backup/modules', (_req: Request, res: Response) => {
+  try {
+    res.json({ files: listModulesBackups() });
+  } catch (err) {
+    res.status(500).json({ message: 'Error listing modules backups', error: err });
+  }
+});
+
+app.get('/api/settings/backup/modules/:file', (req: Request, res: Response) => {
+  try {
+    const fileName = req.params.file;
+    const list = listModulesBackups();
+    if (!list.includes(fileName)) return res.status(404).json({ message: 'Backup not found' });
+    const backupsDir = path.join(__dirname, '..', '..', 'data', 'backups');
+    const full = path.join(backupsDir, fileName);
+    res.download(full, fileName);
+  } catch (err) {
+    res.status(500).json({ message: 'Error downloading modules backup', error: err });
+  }
+});
+
+app.post('/api/settings/backup/modules/:file/restore', (req: Request, res: Response) => {
+  try {
+    const fileName = req.params.file;
+    const list = listModulesBackups();
+    if (!list.includes(fileName)) return res.status(404).json({ message: 'Backup not found' });
+    const cfg = restoreModulesBackup(fileName);
+    if (!cfg) return res.status(500).json({ message: 'Failed to restore modules backup' });
+    res.json(cfg);
+  } catch (err) {
+    res.status(500).json({ message: 'Error restoring modules backup', error: err });
+  }
+});
+
+// Execute a module action with RBAC
+app.post('/api/modules/execute', authenticate(), async (req: Request, res: Response) => {
+  try {
+    const { actionId, moduleId, submoduleId, payload } = req.body || {};
+    if (!actionId) return res.status(400).json({ message: 'actionId is required' });
+    const cfg = loadModules();
+    const mod = cfg.modules.find((m) => (!moduleId || m.id === moduleId) && (
+      !submoduleId || (m.submodules || []).some((s) => s.id === submoduleId)
+    )) || cfg.modules.find((m) => m.id === moduleId);
+    if (!mod) return res.status(404).json({ message: 'Module not found' });
+    const sub = (mod.submodules || []).find((s) => !submoduleId || s.id === submoduleId) || (mod.submodules || [])[0];
+    if (!sub) return res.status(404).json({ message: 'Submodule not found' });
+    const act = (sub.actions || []).find((a) => a.id === actionId);
+    if (!act) return res.status(404).json({ message: 'Action not found' });
+
+    // Permissions: check if action declares permissions and if the user has it (role-based basic check)
+    const user = (req as any).user as { role?: string } | undefined;
+    if (act.permissions && act.permissions.length > 0) {
+      if (!user?.role || !act.permissions.includes(user.role)) {
+        return res.status(403).json({ message: 'Forbidden: missing permissions' });
+      }
+    }
+
+    // Execute according to type
+    switch (act.type) {
+      case 'navigate': {
+        return res.json({ ok: true, type: 'navigate', target: act.target });
+      }
+      case 'open-modal': {
+        return res.json({ ok: true, type: 'open-modal', target: act.target });
+      }
+      case 'export': {
+        // Can be extended to trigger backend exports
+        return res.json({ ok: true, type: 'export', target: act.target });
+      }
+      case 'run-api': {
+        const target = act.target || '';
+        const method = (act.method || 'POST').toUpperCase();
+        // Strict allow-list: allow only /api/<domain> (no settings, no auth management)
+        const allowed = target.startsWith('/api/') && !target.startsWith('/api/settings');
+        if (!allowed) return res.status(400).json({ message: 'API target not allowed' });
+        // Proxy the request server-side using fetch to our own server
+        const url = new URL(target, `http://localhost:${process.env.PORT || 3002}`);
+        const headers: any = { 'Content-Type': 'application/json' };
+        // Include user id/role as internal headers for auditing if needed
+        const user = (req as any).user;
+        if (user) headers['x-user-id'] = user.id;
+        if (user?.role) headers['x-user-role'] = user.role;
+        const resp = await fetch(url.toString(), {
+          method,
+          headers,
+          body: method === 'GET' ? undefined : JSON.stringify(payload ?? {}),
+        });
+        const contentType = resp.headers.get('content-type') || '';
+        if (!resp.ok) {
+          const errorText = contentType.includes('application/json') ? JSON.stringify(await resp.json()) : await resp.text();
+          return res.status(resp.status).send(errorText);
+        }
+        if (contentType.includes('application/json')) {
+          const data = await resp.json();
+          return res.json({ ok: true, type: 'run-api', proxied: true, data });
+        }
+        const text = await resp.text();
+        return res.send(text);
+      }
+      case 'custom':
+      default:
+        return res.json({ ok: true, type: 'custom', action: act.id, payload });
+    }
+  } catch (err) {
+    res.status(500).json({ message: 'Error executing action', error: err });
+  }
+});
+
 
 /* Settings: Theme */
 app.get('/api/settings/theme', (_req: Request, res: Response) => {
@@ -137,6 +449,83 @@ app.post('/api/settings/theme/presets/import', (req: Request, res: Response) => 
     res.json(bundle);
   } catch (err) {
     res.status(500).json({ message: 'Error importing preset', error: err });
+  }
+});
+
+// Rename a preset
+app.post('/api/settings/theme/presets/:name/rename', (req: Request, res: Response) => {
+  try {
+    const { name } = req.params;
+    const { newName } = req.body || {};
+    if (!newName || typeof newName !== 'string') return res.status(400).json({ message: 'newName is required' });
+    const bundle = renameThemePreset(name, newName);
+    if (!bundle) return res.status(404).json({ message: 'Preset not found' });
+    res.json(bundle);
+  } catch (err) {
+    res.status(500).json({ message: 'Error renaming preset', error: err });
+  }
+});
+
+// Duplicate a preset
+app.post('/api/settings/theme/presets/:name/duplicate', (req: Request, res: Response) => {
+  try {
+    const { name } = req.params;
+    const { copyName } = req.body || {};
+    if (!copyName || typeof copyName !== 'string') return res.status(400).json({ message: 'copyName is required' });
+    const bundle = duplicateThemePreset(name, copyName);
+    if (!bundle) return res.status(404).json({ message: 'Preset not found' });
+    res.json(bundle);
+  } catch (err) {
+    res.status(500).json({ message: 'Error duplicating preset', error: err });
+  }
+});
+
+/* Settings: Backup & Restore (Theme) */
+// Create a new backup snapshot
+app.post('/api/settings/backup/theme/snapshot', (_req: Request, res: Response) => {
+  try {
+    const file = createThemeBackup();
+    res.json({ file: path.basename(file) });
+  } catch (err) {
+    res.status(500).json({ message: 'Error creating backup', error: err });
+  }
+});
+
+// List available backups
+app.get('/api/settings/backup/theme', (_req: Request, res: Response) => {
+  try {
+    const files = listThemeBackups();
+    res.json({ files });
+  } catch (err) {
+    res.status(500).json({ message: 'Error listing backups', error: err });
+  }
+});
+
+// Download a specific backup
+app.get('/api/settings/backup/theme/:file', (req: Request, res: Response) => {
+  try {
+    const fileName = req.params.file;
+    const files = listThemeBackups();
+    if (!files.includes(fileName)) return res.status(404).json({ message: 'Backup not found' });
+    const backupsDir = path.join(__dirname, '..', '..', 'data', 'backups');
+    const full = path.join(backupsDir, fileName);
+    res.download(full, fileName);
+  } catch (err) {
+    res.status(500).json({ message: 'Error downloading backup', error: err });
+  }
+});
+
+// Restore from a backup
+app.post('/api/settings/backup/theme/:file/restore', (req: Request, res: Response) => {
+  try {
+    const fileName = req.params.file;
+    const files = listThemeBackups();
+    if (!files.includes(fileName)) return res.status(404).json({ message: 'Backup not found' });
+    const bundle = restoreThemeBackup(fileName);
+    if (!bundle) return res.status(500).json({ message: 'Failed to restore backup' });
+    res.json(bundle);
+  } catch (err) {
+    res.status(500).json({ message: 'Error restoring backup', error: err });
   }
 });
 
@@ -286,23 +675,34 @@ app.get('/api/vehicles/:id', async (req: Request, res: Response) => {
 
 app.post('/api/vehicles', async (req: Request, res: Response) => {
   try {
-    const { plate, serial, brand, model, year, documents, maintenanceHistory, vehiclePhoto, ...vehicleData } = req.body;
-    
-    // Crear el vehículo principal
-    const vehicle = await prisma.vehicle.create({ 
-      data: { 
-        plate, 
-        brand, 
-        model, 
+    const body = req.body || {};
+    const plate: string = (body.plate ?? '').toString().trim();
+    if (!plate) return res.status(400).json({ message: 'plate is required' });
+    const brand: string | undefined = body.brand ? String(body.brand) : undefined;
+    const model: string | undefined = body.model ? String(body.model) : undefined;
+    let year: any = body.manufacturingYear ?? body.year;
+    if (typeof year === 'string') {
+      const parsed = parseInt(year, 10);
+      year = Number.isNaN(parsed) ? undefined : parsed;
+    }
+    if (typeof year !== 'number') year = undefined;
+    const vin: string | undefined = body.serialNumber || body.serial || body.vin || undefined;
+
+    // Crear el vehículo principal (solo campos del modelo)
+    const vehicle = await prisma.vehicle.create({
+      data: {
+        plate,
+        brand,
+        model,
         year,
-        vin: serial, // Mapear serial a VIN
-        ...vehicleData 
-      } 
+        vin,
+      },
     });
 
     // Si hay documentos, crear pólizas relacionadas y subir adjuntos si vienen
     let documentsWithUrls: any[] = [];
-    if (Array.isArray(documents) && documents.length > 0) {
+    const documents = Array.isArray(body.documents) ? body.documents : [];
+    if (documents.length > 0) {
       const polizasData: any[] = [];
       for (const doc of documents) {
         let fileUrl: string | undefined;
@@ -316,20 +716,29 @@ app.post('/api/vehicles', async (req: Request, res: Response) => {
             console.warn('Failed to save document file', e);
           }
         }
-        polizasData.push({
-          type: doc.type,
-          number: doc.number,
-          provider: doc.issuer,
-          issueDate: doc.issueDate ? new Date(doc.issueDate) : new Date(),
-          expiryDate: doc.expireDate ? new Date(doc.expireDate) : new Date(),
-          vehicleId: vehicle.id,
-          fileKey,
-          fileUrl,
-        });
+        // Evitar violar la unicidad en Poliza.number con valores vacíos
+        const numberClean = (doc.number ?? '').toString().trim();
+        if (numberClean) {
+          polizasData.push({
+            type: doc.type,
+            number: numberClean,
+            provider: doc.issuer,
+            issueDate: doc.issueDate ? new Date(doc.issueDate) : new Date(),
+            expiryDate: doc.expireDate ? new Date(doc.expireDate) : new Date(),
+            vehicleId: vehicle.id,
+            fileKey,
+            fileUrl,
+          });
+        }
         documentsWithUrls.push({ ...doc, fileUrl });
       }
       if (polizasData.length > 0) {
-        await prisma.poliza.createMany({ data: polizasData });
+        try {
+          await prisma.poliza.createMany({ data: polizasData, skipDuplicates: true });
+        } catch (e: any) {
+          console.warn('Warning: Could not create some polizas (possibly duplicates):', e?.code || e);
+          // Continue without failing the vehicle creation
+        }
       }
     }
 
@@ -343,6 +752,7 @@ app.post('/api/vehicles', async (req: Request, res: Response) => {
       if (goForm && goForm.versions.length > 0) {
         // Subir foto del vehículo si viene en base64
         let vehiclePhotoUrl: string | undefined = undefined;
+        const vehiclePhoto = body.vehiclePhoto;
         if (vehiclePhoto && typeof vehiclePhoto === 'string' && vehiclePhoto.startsWith('data:')) {
           try {
             const saved = await saveDataUrl(vehiclePhoto, `vehicles/${plate}/photos`, 'vehicle_photo');
@@ -354,7 +764,8 @@ app.post('/api/vehicles', async (req: Request, res: Response) => {
 
         // Guardar fotos de mantenimientos si vienen
         let maintenanceWithPhotos: any[] = [];
-        if (Array.isArray(maintenanceHistory)) {
+        const maintenanceHistory = Array.isArray(body.maintenanceHistory) ? body.maintenanceHistory : [];
+        if (maintenanceHistory.length > 0) {
           for (const m of maintenanceHistory) {
             let photoUrls: string[] = [];
             if (Array.isArray(m.photos)) {
@@ -380,7 +791,7 @@ app.post('/api/vehicles', async (req: Request, res: Response) => {
             vehicleId: vehicle.id,
             status: 'SUBMITTED',
             data: {
-              identification: { plate, serial, brand, model, year },
+              identification: { plate, serialNumber: body.serialNumber ?? vin ?? '', brand, model, year },
               vehiclePhoto: vehiclePhotoUrl,
               documents: documentsWithUrls.length > 0 ? documentsWithUrls : (documents || []),
               maintenanceHistory: maintenanceWithPhotos.length > 0 ? maintenanceWithPhotos : (maintenanceHistory || []),
@@ -393,9 +804,51 @@ app.post('/api/vehicles', async (req: Request, res: Response) => {
     }
 
     res.status(201).json(vehicle);
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error creating vehicle:', err);
+    // Prisma unique constraint
+    if (err?.code === 'P2002') {
+      const target = Array.isArray(err?.meta?.target) ? err.meta.target.join(',') : err?.meta?.target;
+      const msg = target && String(target).includes('plate')
+        ? 'Ya existe un vehículo con esa placa'
+        : 'Violación de unicidad en los datos (duplicado)';
+      return res.status(409).json({ message: msg, target });
+    }
+    res.status(400).json({ message: 'Invalid vehicle data', error: err?.message || String(err) });
+  }
+});
+
+app.put('/api/vehicles/:id', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    const { plate, brand, model, year, vin, ...rest } = req.body || {};
+    const vehicle = await prisma.vehicle.update({
+      where: { id },
+      data: { plate, brand, model, year, vin, ...rest },
+    });
+    res.json(vehicle);
+  } catch (err) {
+    console.error('Error updating vehicle:', err);
     res.status(400).json({ message: 'Invalid vehicle data', error: err });
+  }
+});
+
+app.delete('/api/vehicles/:id', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    // Delete related entities that depend on vehicle to avoid FK violations
+    await prisma.poliza.deleteMany({ where: { vehicleId: id } });
+    await prisma.inspection.deleteMany({ where: { vehicleId: id } });
+    await prisma.accident.deleteMany({ where: { vehicleId: id } });
+    // Optional: delete related form submissions associated with this vehicle
+    try {
+      await prisma.submission.deleteMany({ where: { vehicleId: id } });
+    } catch {}
+    await prisma.vehicle.delete({ where: { id } });
+    res.status(204).send();
+  } catch (err) {
+    console.error('Error deleting vehicle:', err);
+    res.status(500).json({ message: 'Error deleting vehicle', error: err });
   }
 });
 

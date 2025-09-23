@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "clean": "rimraf .next node_modules/.cache",
+    "dev:clean": "npm run clean && next dev"
   },
   "dependencies": {
     "@tanstack/react-query": "^4.35.0",
@@ -24,6 +26,7 @@
   "devDependencies": {
     "@types/node": "24.5.2",
     "@types/react": "19.1.13",
+    "rimraf": "^5.0.5",
     "typescript": "^5.3.3"
   }
 }
