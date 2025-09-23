@@ -100,6 +100,68 @@ model Contractor {
   updatedAt DateTime @updatedAt
 }
 
+// Información completa de la empresa para el sistema SG-SST
+// Incluye todos los campos necesarios para empresas en Colombia
+model Company {
+  id                Int      @id @default(autoincrement())
+  // Información básica
+  name              String   // Razón social
+  nit               String   @unique // NIT con dígito de verificación
+  businessName      String?  // Nombre comercial
+  legalType         String?  // Tipo de sociedad (SAS, LTDA, etc.)
+  
+  // Contacto principal
+  phone             String?
+  mobile            String?
+  email             String?
+  website           String?
+  
+  // Dirección principal
+  address           String?
+  neighborhood      String?  // Barrio
+  city              String?
+  department        String?  // Departamento
+  country           String   @default("Colombia")
+  postalCode        String?
+  
+  // Información legal
+  chamber           String?  // Cámara de comercio
+  registrationNumber String? // Número de matrícula mercantil
+  registrationDate  DateTime?
+  economicActivity  String?  // Actividad económica principal (CIIU)
+  
+  // Información tributaria
+  taxRegime         String?  // Régimen tributario
+  retainerAgent     Boolean  @default(false) // Agente retenedor
+  selfRetainer      Boolean  @default(false) // Autorretenedor
+  vatResponsible    Boolean  @default(false) // Responsable de IVA
+  
+  // Información laboral
+  employeeCount     Int?     // Número de empleados
+  arl               String?  // ARL
+  eps               String?  // EPS
+  pensionFund       String?  // Fondo de pensiones
+  compensationFund  String?  // Caja de compensación
+  
+  // SG-SST
+  sstPolicy         String?  // Política de SG-SST
+  sstObjectives     String?  // Objetivos del SG-SST
+  sstManager        String?  // Responsable del SG-SST
+  sstManagerEmail   String?
+  sstManagerPhone   String?
+  
+  // Logo y documentos
+  logoUrl           String?
+  documentsUrl      String?
+  
+  // Configuración del sistema
+  isActive          Boolean  @default(true)
+  defaultCompany    Boolean  @default(false) // Empresa por defecto
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
 model Document {
   id        Int      @id @default(autoincrement())
   title     String

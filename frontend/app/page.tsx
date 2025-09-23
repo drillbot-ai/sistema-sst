@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import ListShell from "../components/ListShell";
 import KPICard from "../components/KPICard";
 import Pagination from "../components/Pagination";
+import Modal from "../components/Modal";
+import VehicleForm from "../components/VehicleFormComplete";
 
 interface Vehicle {
   id: number;
@@ -18,7 +20,9 @@ interface Vehicle {
 export default function VehiclesPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const limit = 10;
+  const queryClient = useQueryClient();
   const {
     data: vehicles,
     isLoading,
@@ -40,18 +44,87 @@ export default function VehiclesPage() {
       return res.data;
     },
   });
+
+  const createVehicleMutation = useMutation({
+    mutationFn: async (vehicleData: any) => {
+      const response = await axios.post(`http://localhost:3002/api/vehicles`, vehicleData);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+      setIsModalOpen(false);
+    },
+  });
+
+  const handleCreateVehicle = async (data: any) => {
+    await createVehicleMutation.mutateAsync(data);
+  };
+
+  const handleExportVehicle = async (vehicleId: number, format: 'html' | 'excel' | 'pdf') => {
+    try {
+      let url = '';
+      let filename = '';
+      
+      switch (format) {
+        case 'html':
+          url = `http://localhost:3002/api/vehicles/${vehicleId}/export/html`;
+          filename = `vehiculo-${vehicleId}-formulario.html`;
+          break;
+        case 'pdf':
+          url = `http://localhost:3002/api/vehicles/${vehicleId}/export/pdf`;
+          filename = `vehiculo-${vehicleId}-formulario.pdf`;
+          break;
+        case 'excel':
+          // Para Excel, usaremos el HTML y lo convertiremos
+          url = `http://localhost:3002/api/vehicles/${vehicleId}/export/html`;
+          filename = `vehiculo-${vehicleId}-formulario.xls`;
+          break;
+      }
+
+      const response = await axios.get(url, {
+        responseType: format === 'pdf' ? 'blob' : 'text',
+      });
+
+      // Crear un enlace de descarga
+      const blob = format === 'pdf' 
+        ? response.data 
+        : new Blob([response.data], { 
+            type: format === 'excel' ? 'application/vnd.ms-excel' : 'text/html' 
+          });
+      
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('Error al exportar:', error);
+      alert('Error al generar el archivo de exportación');
+    }
+  };
   const items = vehicles ?? [];
   return (
     <ListShell
       title="Flota de vehículos"
       subtitle="Control de hojas de vida, pólizas y mantenimientos."
       actions={
-        <button
-          onClick={() => refetch()}
-          className="btn"
-        >
-          Actualizar
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="btn bg-blue-600 text-white hover:bg-blue-700"
+          >
+            + Agregar Vehículo
+          </button>
+          <button
+            onClick={() => refetch()}
+            className="btn"
+          >
+            Actualizar
+          </button>
+        </div>
       }
       kpis={
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -90,26 +163,27 @@ export default function VehiclesPage() {
                 <th className="px-3 py-2 text-left">Marca</th>
                 <th className="px-3 py-2 text-left">Modelo</th>
                 <th className="px-3 py-2 text-left">Año</th>
+                <th className="px-3 py-2 text-left">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={4} className="p-4">
+                  <td colSpan={5} className="p-4">
                     <div className="skeleton h-6 w-full" />
                   </td>
                 </tr>
               )}
               {isError && (
                 <tr>
-                  <td colSpan={4} className="p-4 text-red-600">
+                  <td colSpan={5} className="p-4 text-red-600">
                     Error al cargar vehículos.
                   </td>
                 </tr>
               )}
               {!isLoading && !isError && items.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-gray-600">
+                  <td colSpan={5} className="p-8 text-center text-gray-600">
                     No hay resultados.
                   </td>
                 </tr>
@@ -120,6 +194,31 @@ export default function VehiclesPage() {
                   <td className="px-3 py-2">{v.brand ?? "-"}</td>
                   <td className="px-3 py-2">{v.model ?? "-"}</td>
                   <td className="px-3 py-2">{v.year ?? "-"}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => handleExportVehicle(v.id, 'html')}
+                        className="text-xs bg-green-100 text-green-700 hover:bg-green-200 px-2 py-1 rounded border"
+                        title="Exportar a HTML"
+                      >
+                        HTML
+                      </button>
+                      <button
+                        onClick={() => handleExportVehicle(v.id, 'excel')}
+                        className="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 px-2 py-1 rounded border"
+                        title="Exportar a Excel"
+                      >
+                        Excel
+                      </button>
+                      <button
+                        onClick={() => handleExportVehicle(v.id, 'pdf')}
+                        className="text-xs bg-red-100 text-red-700 hover:bg-red-200 px-2 py-1 rounded border"
+                        title="Exportar a PDF"
+                      >
+                        PDF
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -134,6 +233,20 @@ export default function VehiclesPage() {
           />
         </div>
       </section>
+      
+      {/* Modal para agregar vehículo */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Agregar Nuevo Vehículo - GO-FO-01"
+        size="xl"
+      >
+        <VehicleForm
+          onSubmit={handleCreateVehicle}
+          onCancel={() => setIsModalOpen(false)}
+          isLoading={createVehicleMutation.isPending}
+        />
+      </Modal>
     </ListShell>
   );
 }
