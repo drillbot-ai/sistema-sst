@@ -8,6 +8,14 @@
   --color-accent: #22c55e; /* verde */
   --color-bg: #ffffff;
   --color-fg: #111827;
+  --color-border: #e5e7eb;
+  --color-panel: #ffffff;
+  --color-link: #2563eb;
+  --color-muted-bg: #f9fafb;
+  --color-muted-text: #6b7280;
+  --color-success: #16a34a;
+  --color-warning: #f59e0b;
+  --color-error: #dc2626;
   --font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji";
   --font-size-base: 14px;
   --radius-base: 0.5rem;
@@ -20,11 +28,7 @@ html, body {
   background-color: var(--color-bg);
 }
 
-.card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: var(--radius-base);
-}
+.card { background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-base); }
 
 /* Custom design tokens and utility classes for the SG‑SST system */
 :root {
