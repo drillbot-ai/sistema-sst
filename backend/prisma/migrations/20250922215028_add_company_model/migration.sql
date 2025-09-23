@@ -1,0 +1,47 @@
+-- CreateTable
+CREATE TABLE "Company" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "nit" TEXT NOT NULL,
+    "businessName" TEXT,
+    "legalType" TEXT,
+    "phone" TEXT,
+    "mobile" TEXT,
+    "email" TEXT,
+    "website" TEXT,
+    "address" TEXT,
+    "neighborhood" TEXT,
+    "city" TEXT,
+    "department" TEXT,
+    "country" TEXT NOT NULL DEFAULT 'Colombia',
+    "postalCode" TEXT,
+    "chamber" TEXT,
+    "registrationNumber" TEXT,
+    "registrationDate" TIMESTAMP(3),
+    "economicActivity" TEXT,
+    "taxRegime" TEXT,
+    "retainerAgent" BOOLEAN NOT NULL DEFAULT false,
+    "selfRetainer" BOOLEAN NOT NULL DEFAULT false,
+    "vatResponsible" BOOLEAN NOT NULL DEFAULT false,
+    "employeeCount" INTEGER,
+    "arl" TEXT,
+    "eps" TEXT,
+    "pensionFund" TEXT,
+    "compensationFund" TEXT,
+    "sstPolicy" TEXT,
+    "sstObjectives" TEXT,
+    "sstManager" TEXT,
+    "sstManagerEmail" TEXT,
+    "sstManagerPhone" TEXT,
+    "logoUrl" TEXT,
+    "documentsUrl" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "defaultCompany" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Company_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Company_nit_key" ON "Company"("nit");

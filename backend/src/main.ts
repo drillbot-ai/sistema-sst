@@ -16,6 +16,9 @@ import { userRegisterSchema, userLoginSchema, polizaCreateSchema, capacitacionCr
 import { getPresignedUploadUrl } from './s3';
 import { z } from 'zod';
 import { setupSwagger } from './swagger';
+import path from 'path';
+import fs from 'fs';
+import { ensureUploadsDir, uploadsDir, saveDataUrl, localPathFromUrl } from './storage';
 // Import the forms router for dynamic form operations
 import formsRouter from './forms';
 
@@ -24,7 +27,12 @@ const app = express();
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json());
+// Accept larger payloads to allow base64 images/files
+app.use(bodyParser.json({ limit: '25mb' }));
+app.use(bodyParser.urlencoded({ limit: '25mb', extended: true }));
+// Static serving for local uploads
+ensureUploadsDir();
+app.use('/uploads', express.static(uploadsDir));
 
 // Swagger documentation
 // setupSwagger(app);
@@ -111,6 +119,57 @@ app.post('/api/auth/logout', async (req: Request, res: Response) => {
   }
 });
 
+/* Company Endpoints */
+app.get('/api/company', async (_req: Request, res: Response) => {
+  try {
+  const company = await (prisma as any).company.findFirst({
+      where: { defaultCompany: true }
+    });
+    res.json(company);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching company', error: err });
+  }
+});
+
+app.post('/api/company', async (req: Request, res: Response) => {
+  try {
+    // Si es la empresa por defecto, desactivar las otras
+    if (req.body.defaultCompany) {
+  await (prisma as any).company.updateMany({
+        where: { defaultCompany: true },
+        data: { defaultCompany: false }
+      });
+    }
+    
+  const company = await (prisma as any).company.create({ data: req.body });
+    res.status(201).json(company);
+  } catch (err) {
+    res.status(400).json({ message: 'Invalid company data', error: err });
+  }
+});
+
+app.put('/api/company/:id', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    
+    // Si es la empresa por defecto, desactivar las otras
+    if (req.body.defaultCompany) {
+  await (prisma as any).company.updateMany({
+        where: { defaultCompany: true, id: { not: id } },
+        data: { defaultCompany: false }
+      });
+    }
+    
+  const company = await (prisma as any).company.update({
+      where: { id },
+      data: req.body
+    });
+    res.json(company);
+  } catch (err) {
+    res.status(400).json({ message: 'Invalid company data', error: err });
+  }
+});
+
 /* Vehicle Endpoints */
 app.get('/api/vehicles', async (req: Request, res: Response) => {
   const limit = req.query.limit ? parseInt(String(req.query.limit)) : 10;
@@ -132,9 +191,115 @@ app.get('/api/vehicles/:id', async (req: Request, res: Response) => {
 
 app.post('/api/vehicles', async (req: Request, res: Response) => {
   try {
-    const vehicle = await prisma.vehicle.create({ data: req.body });
+    const { plate, serial, brand, model, year, documents, maintenanceHistory, vehiclePhoto, ...vehicleData } = req.body;
+    
+    // Crear el vehículo principal
+    const vehicle = await prisma.vehicle.create({ 
+      data: { 
+        plate, 
+        brand, 
+        model, 
+        year,
+        vin: serial, // Mapear serial a VIN
+        ...vehicleData 
+      } 
+    });
+
+    // Si hay documentos, crear pólizas relacionadas y subir adjuntos si vienen
+    let documentsWithUrls: any[] = [];
+    if (Array.isArray(documents) && documents.length > 0) {
+      const polizasData: any[] = [];
+      for (const doc of documents) {
+        let fileUrl: string | undefined;
+        let fileKey: string | undefined;
+        if (doc.fileData && typeof doc.fileData === 'string') {
+          try {
+            const saved = await saveDataUrl(doc.fileData, `vehicles/${plate}/documents`, doc.fileName || `${doc.type}_${doc.number}`);
+            fileUrl = saved.url;
+            fileKey = saved.key;
+          } catch (e) {
+            console.warn('Failed to save document file', e);
+          }
+        }
+        polizasData.push({
+          type: doc.type,
+          number: doc.number,
+          provider: doc.issuer,
+          issueDate: doc.issueDate ? new Date(doc.issueDate) : new Date(),
+          expiryDate: doc.expireDate ? new Date(doc.expireDate) : new Date(),
+          vehicleId: vehicle.id,
+          fileKey,
+          fileUrl,
+        });
+        documentsWithUrls.push({ ...doc, fileUrl });
+      }
+      if (polizasData.length > 0) {
+        await prisma.poliza.createMany({ data: polizasData });
+      }
+    }
+
+    // Crear submission del formulario GO-FO-01
+    try {
+      const goForm = await prisma.form.findUnique({
+        where: { code: 'GO-FO-01' },
+        include: { versions: { where: { active: true } } }
+      });
+
+      if (goForm && goForm.versions.length > 0) {
+        // Subir foto del vehículo si viene en base64
+        let vehiclePhotoUrl: string | undefined = undefined;
+        if (vehiclePhoto && typeof vehiclePhoto === 'string' && vehiclePhoto.startsWith('data:')) {
+          try {
+            const saved = await saveDataUrl(vehiclePhoto, `vehicles/${plate}/photos`, 'vehicle_photo');
+            vehiclePhotoUrl = saved.url;
+          } catch (e) {
+            console.warn('Failed to save vehicle photo', e);
+          }
+        }
+
+        // Guardar fotos de mantenimientos si vienen
+        let maintenanceWithPhotos: any[] = [];
+        if (Array.isArray(maintenanceHistory)) {
+          for (const m of maintenanceHistory) {
+            let photoUrls: string[] = [];
+            if (Array.isArray(m.photos)) {
+              for (let i = 0; i < m.photos.length; i++) {
+                const p = m.photos[i];
+                if (p && typeof p === 'string' && p.startsWith('data:')) {
+                  try {
+                    const saved = await saveDataUrl(p, `vehicles/${plate}/maintenance`, `m_${m.date || 'na'}_${i + 1}`);
+                    photoUrls.push(saved.url);
+                  } catch (e) {
+                    console.warn('Failed to save maintenance photo', e);
+                  }
+                }
+              }
+            }
+            maintenanceWithPhotos.push({ ...m, photos: photoUrls });
+          }
+        }
+
+        await prisma.submission.create({
+          data: {
+            formVersionId: goForm.versions[0].id,
+            vehicleId: vehicle.id,
+            status: 'SUBMITTED',
+            data: {
+              identification: { plate, serial, brand, model, year },
+              vehiclePhoto: vehiclePhotoUrl,
+              documents: documentsWithUrls.length > 0 ? documentsWithUrls : (documents || []),
+              maintenanceHistory: maintenanceWithPhotos.length > 0 ? maintenanceWithPhotos : (maintenanceHistory || []),
+            }
+          }
+        });
+      }
+    } catch (formError) {
+      console.warn('Warning: Could not create form submission for GO-FO-01:', formError);
+    }
+
     res.status(201).json(vehicle);
   } catch (err) {
+    console.error('Error creating vehicle:', err);
     res.status(400).json({ message: 'Invalid vehicle data', error: err });
   }
 });
@@ -367,6 +532,420 @@ app.get('/api/metrics', async (_req: Request, res: Response) => {
   }
 });
 
+/* Vehicle Export Endpoints */
+app.get('/api/vehicles/:id/export/html', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    const vehicle = await prisma.vehicle.findUnique({ 
+      where: { id },
+      include: { polizas: true }
+    });
+    
+    if (!vehicle) return res.status(404).json({ message: 'Vehicle not found' });
+    
+    // Obtener información de la empresa
+  const company = await (prisma as any).company.findFirst({ where: { defaultCompany: true } });
+    
+    // Obtener submission del GO-FO-01
+    const goForm = await prisma.form.findUnique({
+      where: { code: 'GO-FO-01' },
+      include: { 
+        versions: { 
+          where: { active: true },
+          include: {
+            submissions: {
+              where: { vehicleId: id },
+              orderBy: { createdAt: 'desc' },
+              take: 1
+            }
+          }
+        }
+      }
+    });
+    
+    const submission = goForm?.versions[0]?.submissions[0];
+    
+    // Generar HTML del formulario GO-FO-01
+    const htmlContent = generateVehicleFormHTML(vehicle, company, submission);
+    
+    res.setHeader('Content-Type', 'text/html');
+    res.setHeader('Content-Disposition', `attachment; filename=GO-FO-01_${vehicle.plate}.html`);
+    res.send(htmlContent);
+  } catch (err) {
+    res.status(500).json({ message: 'Error generating HTML', error: err });
+  }
+});
+
+app.get('/api/vehicles/:id/export/pdf', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    const vehicle = await prisma.vehicle.findUnique({ 
+      where: { id },
+      include: { polizas: true }
+    });
+    
+    if (!vehicle) return res.status(404).json({ message: 'Vehicle not found' });
+    
+    // Obtener información de la empresa
+  const company = await (prisma as any).company.findFirst({ where: { defaultCompany: true } });
+    
+    // Obtener submission del GO-FO-01
+    const goForm = await prisma.form.findUnique({
+      where: { code: 'GO-FO-01' },
+      include: { 
+        versions: { 
+          where: { active: true },
+          include: {
+            submissions: {
+              where: { vehicleId: id },
+              orderBy: { createdAt: 'desc' },
+              take: 1
+            }
+          }
+        }
+      }
+    });
+    
+    const submission = goForm?.versions[0]?.submissions[0];
+    
+    // Crear PDF del formulario GO-FO-01
+    const doc = new PDFDocument({ margin: 50 });
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=GO-FO-01_${vehicle.plate}.pdf`);
+    doc.pipe(res);
+    
+    // Generar contenido del PDF
+    generateVehicleFormPDF(doc, vehicle, company, submission);
+    
+    doc.end();
+  } catch (err) {
+    res.status(500).json({ message: 'Error generating PDF', error: err });
+  }
+});
+
+// Función auxiliar para generar HTML del formulario
+function generateVehicleFormHTML(vehicle: any, company: any, submission: any) {
+  const data = submission?.data || {};
+  const companyInfo = company || {};
+  
+  return `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GO-FO-01 - ${vehicle.plate}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .header { text-align: center; border: 2px solid #000; padding: 10px; margin-bottom: 20px; }
+        .company-info { background: #f0b90b; padding: 10px; text-align: center; font-weight: bold; }
+        .form-info { text-align: right; padding: 10px; }
+        .section { margin: 20px 0; border: 1px solid #000; }
+        .section-title { background: #e0e0e0; padding: 10px; font-weight: bold; text-align: center; }
+        .field-row { display: flex; margin: 5px 0; }
+        .field { flex: 1; padding: 5px; border-right: 1px solid #ccc; }
+        .field:last-child { border-right: none; }
+        .field-label { font-weight: bold; margin-right: 10px; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+        th { background-color: #f0f0f0; }
+        .photo-placeholder { width: 200px; height: 150px; border: 2px dashed #ccc; margin: 20px auto; display: flex; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="flex: 1;">
+                <!-- Logo placeholder -->
+                <div style="width: 80px; height: 80px; border: 1px solid #000; display: flex; align-items: center; justify-content: center;">
+                    LOGO
+                </div>
+            </div>
+            <div style="flex: 2; text-align: center;">
+                <h2>HOJA DE VIDA DE MAQUINARIA AMARILLA</h2>
+            </div>
+            <div style="flex: 1; text-align: right; font-size: 12px;">
+                <div>CÓDIGO: GO-FO-01</div>
+                <div>VERSIÓN: 01</div>
+                <div>APROBADO: 15-11-2023</div>
+                <div>PÁGINA: 1 DE 1</div>
+            </div>
+        </div>
+        <div class="company-info">
+            ${companyInfo.name || 'EMPRESA'} ${companyInfo.nit ? `NIT: ${companyInfo.nit}` : ''}
+        </div>
+    </div>
+
+    ${data.vehiclePhoto ? `
+    <div style="text-align:center; margin: 10px 0;">
+      <img src="${data.vehiclePhoto}" alt="Foto vehículo" style="max-width: 200px; max-height: 150px; object-fit: cover; border: 1px solid #999;" />
+    </div>` : `
+    <div class="photo-placeholder">FOTO VEHÍCULO</div>
+    `}
+
+    <div class="section">
+        <div class="section-title">1. INFORMACIÓN DEL VEHÍCULO</div>
+        <table>
+            <tr>
+                <td><strong>No. SERIE:</strong> ${data.identification?.serialNumber || vehicle.vin || ''}</td>
+                <td><strong>Marca:</strong> ${data.identification?.brand || vehicle.brand || ''}</td>
+                <td><strong>Año de fabricación:</strong> ${data.identification?.year || vehicle.year || ''}</td>
+            </tr>
+            <tr>
+                <td><strong>Fecha de registro:</strong> ${data.identification?.registrationDate || ''}</td>
+                <td><strong>Modelo:</strong> ${data.identification?.model || vehicle.model || ''}</td>
+                <td><strong>Color:</strong> ${data.identification?.color || ''}</td>
+            </tr>
+            <tr>
+                <td><strong>No. Motor:</strong> ${data.identification?.motorNumber || ''}</td>
+                <td><strong>Combustible:</strong> ${data.identification?.fuel || ''}</td>
+                <td><strong>Línea:</strong> ${data.identification?.line || ''}</td>
+            </tr>
+            <tr>
+                <td><strong>Serie:</strong> ${data.identification?.series || ''}</td>
+                <td><strong>Clase de vehículo:</strong> ${data.identification?.vehicleClass || ''}</td>
+                <td><strong>Manifiesto de aduana:</strong> ${data.identification?.customsManifest || ''}</td>
+            </tr>
+            <tr>
+                <td><strong>Tarjeta de registro:</strong> ${data.identification?.registrationCard || ''}</td>
+                <td><strong>Rodaje:</strong> ${data.identification?.mileage || ''}</td>
+                <td><strong>Placa:</strong> ${vehicle.plate}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">2. INFORMACIÓN DEL PROPIETARIO</div>
+        <table>
+            <tr>
+                <td><strong>Empresa:</strong> ${data.owner?.ownerCompany || companyInfo.name || ''}</td>
+                <td><strong>NIT:</strong> ${data.owner?.ownerNit || companyInfo.nit || ''}</td>
+            </tr>
+            <tr>
+                <td><strong>Dirección:</strong> ${data.owner?.ownerAddress || companyInfo.address || ''}</td>
+                <td><strong>Barrio:</strong> ${data.owner?.ownerNeighborhood || companyInfo.neighborhood || ''}</td>
+            </tr>
+            <tr>
+                <td><strong>Teléfono:</strong> ${data.owner?.ownerPhone || companyInfo.phone || ''}</td>
+                <td><strong>Celular:</strong> ${data.owner?.ownerMobile || companyInfo.mobile || ''}</td>
+            </tr>
+            <tr>
+                <td><strong>Ciudad:</strong> ${data.owner?.ownerCity || companyInfo.city || ''}</td>
+                <td><strong>Municipio:</strong> ${data.owner?.ownerMunicipality || ''}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">3. DATOS DE ACTUALIZACIÓN</div>
+        <table>
+            <tr>
+                <th>NOMBRES Y APELLIDOS</th>
+                <th>CARGO</th>
+                <th>FECHA</th>
+            </tr>
+            ${(data.updatedBy || []).map((person: any) => `
+            <tr>
+                <td>${person.fullName || ''}</td>
+                <td>${person.position || ''}</td>
+                <td>${person.date || ''}</td>
+            </tr>
+            `).join('')}
+        </table>
+    </div>
+
+  ${data.documents && data.documents.length > 0 ? `
+    <div class="section">
+        <div class="section-title">DOCUMENTOS Y PÓLIZAS</div>
+        <table>
+            <tr>
+        <th>Tipo</th>
+        <th>Número</th>
+        <th>Aseguradora/Entidad</th>
+        <th>Expedición</th>
+        <th>Vencimiento</th>
+        <th>Archivo</th>
+            </tr>
+            ${data.documents.map((doc: any) => `
+            <tr>
+                <td>${doc.type || ''}</td>
+                <td>${doc.number || ''}</td>
+                <td>${doc.issuer || ''}</td>
+                <td>${doc.issueDate || ''}</td>
+        <td>${doc.expireDate || ''}</td>
+        <td>${doc.fileUrl ? `<a href="${doc.fileUrl}" target="_blank">Ver</a>` : ''}</td>
+            </tr>
+            `).join('')}
+        </table>
+    </div>
+    ` : ''}
+
+  ${data.maintenanceHistory && data.maintenanceHistory.length > 0 ? `
+    <div class="section">
+        <div class="section-title">HISTORIAL DE MANTENIMIENTO</div>
+    <div style="display:flex; flex-wrap: wrap; gap: 8px; margin: 8px 0;">
+      ${data.maintenanceHistory.flatMap((m: any) => (m.photos || [])).map((u: string) => `<img src="${u}" style="width:100px;height:75px;object-fit:cover;border:1px solid #ccc;" />`).join('')}
+    </div>
+        <table>
+            <tr>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Descripción</th>
+                <th>Costo</th>
+            </tr>
+            ${data.maintenanceHistory.map((maintenance: any) => `
+            <tr>
+                <td>${maintenance.date || ''}</td>
+                <td>${maintenance.type || ''}</td>
+                <td>${maintenance.description || ''}</td>
+                <td>${maintenance.cost ? `$${maintenance.cost}` : ''}</td>
+            </tr>
+            `).join('')}
+        </table>
+    </div>
+    ` : ''}
+
+    <div style="margin-top: 50px; text-align: center; font-size: 12px; color: #666;">
+        Documento generado automáticamente por el Sistema SG-SST<br>
+        Fecha de generación: ${new Date().toLocaleDateString('es-CO')}
+    </div>
+</body>
+</html>
+  `;
+}
+
+// Función auxiliar para generar PDF del formulario
+function generateVehicleFormPDF(doc: any, vehicle: any, company: any, submission: any) {
+  const data = submission?.data || {};
+  const companyInfo = company || {};
+  
+  // Header
+  doc.fontSize(16).text('HOJA DE VIDA DE MAQUINARIA AMARILLA', { align: 'center' });
+  doc.fontSize(12).text(`CÓDIGO: GO-FO-01 | VERSIÓN: 01 | APROBADO: 15-11-2023`, { align: 'center' });
+  doc.moveDown();
+  
+  if (companyInfo.name) {
+    doc.fontSize(14).text(`${companyInfo.name}${companyInfo.nit ? ` NIT: ${companyInfo.nit}` : ''}`, { align: 'center' });
+    doc.moveDown();
+  }
+  
+  // Foto del vehículo (si existe y es local), de lo contrario placeholder
+  const photoUrl: string | undefined = data.vehiclePhoto;
+  let drewPhoto = false;
+  if (photoUrl) {
+    const local = localPathFromUrl(photoUrl);
+    if (local && fs.existsSync(local)) {
+      try {
+        const x = (doc.page.width - 140) / 2;
+        const y = doc.y;
+        doc.image(local, x, y, { fit: [140, 100], align: 'center' }).rect(x, y, 140, 100).stroke();
+        doc.moveDown(6);
+        drewPhoto = true;
+      } catch {}
+    }
+  }
+  if (!drewPhoto) {
+    doc.fontSize(12).text('FOTO VEHÍCULO', { align: 'center' });
+    doc.rect(250, doc.y, 100, 80).stroke();
+    doc.moveDown(6);
+  }
+  
+  // 1. Información del vehículo
+  doc.fontSize(14).text('1. INFORMACIÓN DEL VEHÍCULO', { underline: true });
+  doc.moveDown();
+  
+  const vehicleInfo = [
+    [`No. SERIE: ${data.identification?.serialNumber || vehicle.vin || ''}`, `Marca: ${data.identification?.brand || vehicle.brand || ''}`, `Año: ${data.identification?.year || vehicle.year || ''}`],
+    [`Fecha registro: ${data.identification?.registrationDate || ''}`, `Modelo: ${data.identification?.model || vehicle.model || ''}`, `Color: ${data.identification?.color || ''}`],
+    [`No. Motor: ${data.identification?.motorNumber || ''}`, `Combustible: ${data.identification?.fuel || ''}`, `Línea: ${data.identification?.line || ''}`],
+    [`Serie: ${data.identification?.series || ''}`, `Clase: ${data.identification?.vehicleClass || ''}`, `Placa: ${vehicle.plate}`]
+  ];
+  
+  vehicleInfo.forEach(row => {
+    row.forEach((field, index) => {
+      doc.text(field, 50 + (index * 170), doc.y - 15, { width: 160 });
+    });
+    doc.moveDown();
+  });
+  
+  doc.moveDown();
+  
+  // 2. Información del propietario
+  doc.fontSize(14).text('2. INFORMACIÓN DEL PROPIETARIO', { underline: true });
+  doc.moveDown();
+  
+  const ownerInfo = [
+    [`Empresa: ${data.owner?.ownerCompany || companyInfo.name || ''}`, `NIT: ${data.owner?.ownerNit || companyInfo.nit || ''}`],
+    [`Dirección: ${data.owner?.ownerAddress || companyInfo.address || ''}`, `Barrio: ${data.owner?.ownerNeighborhood || companyInfo.neighborhood || ''}`],
+    [`Teléfono: ${data.owner?.ownerPhone || companyInfo.phone || ''}`, `Celular: ${data.owner?.ownerMobile || companyInfo.mobile || ''}`],
+    [`Ciudad: ${data.owner?.ownerCity || companyInfo.city || ''}`, `Municipio: ${data.owner?.ownerMunicipality || ''}`]
+  ];
+  
+  ownerInfo.forEach(row => {
+    row.forEach((field, index) => {
+      doc.text(field, 50 + (index * 270), doc.y - 15, { width: 260 });
+    });
+    doc.moveDown();
+  });
+  
+  doc.moveDown();
+  
+  // 3. Datos de actualización
+  doc.fontSize(14).text('3. DATOS DE ACTUALIZACIÓN', { underline: true });
+  doc.moveDown();
+  
+  if (data.updatedBy && data.updatedBy.length > 0) {
+    data.updatedBy.forEach((person: any) => {
+      doc.text(`${person.fullName || ''} - ${person.position || ''} - ${person.date || ''}`);
+    });
+  }
+  
+  // Documentos y pólizas (si existen)
+  if (Array.isArray(data.documents) && data.documents.length > 0) {
+    doc.moveDown();
+    doc.fontSize(14).text('DOCUMENTOS Y PÓLIZAS', { underline: true });
+    doc.moveDown(0.5);
+    data.documents.forEach((d: any) => {
+      doc.fontSize(10).text(`• ${d.type || ''} ${d.number || ''} – ${d.issuer || ''} (${d.issueDate || ''} → ${d.expireDate || ''}) ${d.fileUrl ? '[archivo adjunto]' : ''}`);
+    });
+  }
+
+  // Fotos de mantenimiento si existen
+  if (Array.isArray(data.maintenanceHistory) && data.maintenanceHistory.length > 0) {
+    const photos: string[] = data.maintenanceHistory.flatMap((m: any) => Array.isArray(m.photos) ? m.photos : []);
+    if (photos.length > 0) {
+      doc.moveDown();
+      doc.fontSize(14).text('FOTOS DE MANTENIMIENTO', { underline: true });
+      doc.moveDown(0.5);
+      const startX = doc.x;
+      let x = startX;
+      let y = doc.y;
+      const boxW = 90;
+      const boxH = 65;
+      const gap = 8;
+      const maxX = doc.page.width - doc.page.margins.right - boxW;
+      photos.forEach((u: string) => {
+        const local = localPathFromUrl(u);
+        if (local && fs.existsSync(local)) {
+          try {
+            doc.image(local, x, y, { fit: [boxW, boxH], align: 'left' }).rect(x, y, boxW, boxH).stroke();
+            x += boxW + gap;
+            if (x > maxX) {
+              x = startX;
+              y += boxH + gap;
+            }
+          } catch {}
+        }
+      });
+      doc.moveDown(2);
+    }
+  }
+
+  doc.moveDown(2);
+  doc.fontSize(10).text(`Documento generado automáticamente - ${new Date().toLocaleDateString('es-CO')}`, { align: 'center' });
+}
+
 /* Report Generation */
 app.get('/api/reports/accident/:id', async (req: Request, res: Response) => {
   const id = Number(req.params.id);
@@ -395,6 +974,68 @@ app.get('/api/reports/accident/:id', async (req: Request, res: Response) => {
     doc.text(`Severidad: ${accident.severity}`);
   }
   doc.end();
+});
+
+// Company endpoints
+app.get('/api/companies', async (req: Request, res: Response) => {
+  try {
+  const companies = await (prisma as any).company.findMany();
+    res.json(companies);
+  } catch (error) {
+    console.error('Error fetching companies:', error);
+    res.status(500).json({ message: 'Error fetching companies' });
+  }
+});
+
+app.get('/api/companies/:id', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+  const company = await (prisma as any).company.findUnique({ where: { id } });
+    if (!company) {
+      return res.status(404).json({ message: 'Company not found' });
+    }
+    res.json(company);
+  } catch (error) {
+    console.error('Error fetching company:', error);
+    res.status(500).json({ message: 'Error fetching company' });
+  }
+});
+
+app.post('/api/companies', async (req: Request, res: Response) => {
+  try {
+  const company = await (prisma as any).company.create({
+      data: req.body
+    });
+    res.status(201).json(company);
+  } catch (error) {
+    console.error('Error creating company:', error);
+    res.status(500).json({ message: 'Error creating company' });
+  }
+});
+
+app.put('/api/companies/:id', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+  const company = await (prisma as any).company.update({
+      where: { id },
+      data: req.body
+    });
+    res.json(company);
+  } catch (error) {
+    console.error('Error updating company:', error);
+    res.status(500).json({ message: 'Error updating company' });
+  }
+});
+
+app.delete('/api/companies/:id', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+  await (prisma as any).company.delete({ where: { id } });
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting company:', error);
+    res.status(500).json({ message: 'Error deleting company' });
+  }
 });
 
 // Start server
