@@ -183,8 +183,8 @@ export default function SettingsPage() {
 
   return (
     <ListShell
-      title="Configuración de Empresa"
-      subtitle="Gestiona la información completa de tu empresa para el sistema SG-SST"
+      title="Configuración de la empresa"
+      subtitle="Gestiona la información corporativa base para todo el sistema"
     >
       <div className="bg-white rounded-lg shadow">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 p-6">

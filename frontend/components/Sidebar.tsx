@@ -76,7 +76,19 @@ export default function Sidebar() {
     {
       title: "Ajustes",
       items: [
-        { href: "/ajustes", label: "Configuración" },
+        { href: "/ajustes", label: "Configuración de la empresa" },
+        { href: "/ajustes/estilos", label: "Estilos" },
+        { href: "/ajustes/modulos", label: "Módulos" },
+        { href: "/ajustes/numeracion", label: "Numeración" },
+        { href: "/ajustes/seguridad", label: "Seguridad" },
+        { href: "/ajustes/localizacion", label: "Localización" },
+        { href: "/ajustes/backup", label: "Backup y reset" },
+        { href: "/ajustes/integraciones", label: "Integraciones" },
+        { href: "/ajustes/notificaciones", label: "Notificaciones" },
+        { href: "/ajustes/auditoria", label: "Auditoría" },
+        { href: "/ajustes/plantillas", label: "Plantillas" },
+        { href: "/ajustes/automatizaciones", label: "Automatizaciones" },
+        { href: "/ajustes/avanzado", label: "Avanzado" },
       ],
     },
   ];
