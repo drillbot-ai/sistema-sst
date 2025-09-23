@@ -2,6 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-primary: #2563eb; /* azul */
+  --color-secondary: #0ea5e9; /* celeste */
+  --color-accent: #22c55e; /* verde */
+  --color-bg: #ffffff;
+  --color-fg: #111827;
+  --font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-size-base: 14px;
+  --radius-base: 0.5rem;
+}
+
+html, body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  color: var(--color-fg);
+  background-color: var(--color-bg);
+}
+
+.card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: var(--radius-base);
+}
+
 /* Custom design tokens and utility classes for the SG‑SST system */
 :root {
   --bg: 245 245 247; /* stone-100 */

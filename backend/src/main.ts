@@ -19,6 +19,7 @@ import { setupSwagger } from './swagger';
 import path from 'path';
 import fs from 'fs';
 import { ensureUploadsDir, uploadsDir, saveDataUrl, localPathFromUrl } from './storage';
+import { loadTheme, saveTheme } from './settings';
 // Import the forms router for dynamic form operations
 import formsRouter from './forms';
 
@@ -43,6 +44,25 @@ app.use('/api', formsRouter);
 // Simple health check
 app.get('/', (_req: Request, res: Response) => {
   res.json({ message: 'SST API is running' });
+});
+
+/* Settings: Theme */
+app.get('/api/settings/theme', (_req: Request, res: Response) => {
+  try {
+    const theme = loadTheme();
+    res.json(theme);
+  } catch (err) {
+    res.status(500).json({ message: 'Error loading theme settings', error: err });
+  }
+});
+
+app.put('/api/settings/theme', (req: Request, res: Response) => {
+  try {
+    const theme = saveTheme(req.body || {});
+    res.json(theme);
+  } catch (err) {
+    res.status(500).json({ message: 'Error saving theme settings', error: err });
+  }
 });
 
 /* Auth Endpoints */
